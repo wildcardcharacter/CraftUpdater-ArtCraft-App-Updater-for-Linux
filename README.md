@@ -61,6 +61,3 @@ The language preference is saved in `~/.config/craft-updater-gui/settings.json`.
 ## License and affiliation
 
 CraftUpdater is an independent, unofficial community project and is not affiliated with or endorsed by ArtCraft. See the repository license for the terms that apply to this project.
-=======
-# CraftUpdater-ArtCraft-App-Updater-for-Linux
-A lightweight Linux GUI to check, build, and update ArtCraft apps from source.
