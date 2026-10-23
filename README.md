@@ -12,6 +12,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 - Build selected apps from source and install them into `~/.local/bin`.
 - Check build tools, required development libraries, and free disk space before starting a build.
 - Cancel a running operation. The existing managed executable is kept until the replacement has built successfully.
+- Get a completion dialog listing the apps processed after a successful update operation.
 - Switch the interface between German and English.
 - View build output in the app and in a persistent log file.
 
@@ -47,6 +48,8 @@ To add CraftUpdater to your application menu and install a command in `~/.local/
 ```sh
 ./install.sh
 ```
+
+Click **Check for updates**, select the apps you want to update, then click **Update selected** below the app list. CraftUpdater shows a confirmation dialog when the operation finishes successfully.
 
 ## How updates work
 

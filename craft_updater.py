@@ -77,6 +77,8 @@ TEXTS = {
         "low_space": "Zu wenig freier Speicher: {} GB verfügbar, mindestens {} GB erforderlich.",
         "new_commits": "{} neue Commits", "version_check_failed": "Versionsprüfung fehlgeschlagen",
         "version_unknown": "Unbekannt",
+        "update_complete_title": "Update abgeschlossen",
+        "update_complete_message": "Der Update-Vorgang ist abgeschlossen.\n\nVerarbeitet: {}",
     },
     "en": {
         "subtitle": "Manage your ArtCraft apps in one place", "language": "Language",
@@ -110,6 +112,8 @@ TEXTS = {
         "low_space": "Not enough free space: {} GB available, at least {} GB required.",
         "new_commits": "{} new commits", "version_check_failed": "Version check failed",
         "version_unknown": "Unknown",
+        "update_complete_title": "Update complete",
+        "update_complete_message": "The update operation has finished.\n\nProcessed: {}",
     },
 }
 
@@ -658,6 +662,8 @@ class CraftUpdater(tk.Tk):
         app_controls.pack(fill="x", pady=(12, 0))
         self.select_installed_btn = ttk.Button(app_controls, text="", command=self._select_installed)
         self.select_installed_btn.pack(side="left")
+        self.update_btn = ttk.Button(app_controls, text="", style="Primary.TButton", command=self._update_selected)
+        self.update_btn.pack(side="left", padx=8)
         self.select_all_btn = ttk.Button(app_controls, text="", command=self._select_all)
         self.select_all_btn.pack(side="right")
 
@@ -689,8 +695,6 @@ class CraftUpdater(tk.Tk):
         self.cancel_btn.pack(side="right", padx=(0, 8))
         self.close_btn = ttk.Button(footer, text="", command=self._close_window)
         self.close_btn.pack(side="right", padx=(0, 8))
-        self.update_btn = ttk.Button(footer, text="", style="Primary.TButton", command=self._update_selected)
-        self.update_btn.pack(side="right")
 
     def _stat_card(self, parent, title, value):
         card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 12))
@@ -855,6 +859,7 @@ class CraftUpdater(tk.Tk):
                 update_app(name, package, force, lambda line: self.events.put(("log", line)), translate, self.cancel_event)
                 self.events.put(("log", self._t("app_completed").format(name)))
             self.events.put(("refresh", None))
+            self.events.put(("update_complete", ", ".join(name for name, _package in selected)))
         self._start(self._t("update_run"), operation)
 
     def _drain_events(self):
@@ -871,6 +876,11 @@ class CraftUpdater(tk.Tk):
                     self._refresh_status()
                 elif kind == "cancelled":
                     self._finish_operation(self._t("cancelled"))
+                elif kind == "update_complete":
+                    messagebox.showinfo(
+                        self._t("update_complete_title"),
+                        self._t("update_complete_message").format(value),
+                    )
                 elif kind == "error":
                     self._append(self._t("error_prefix") + " " + value)
                     self._refresh_status()
