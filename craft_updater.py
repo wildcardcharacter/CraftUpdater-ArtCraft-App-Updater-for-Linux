@@ -32,7 +32,7 @@ APPS = [
     ("FilmCraft", "filmcraft"), ("EffectCraft", "effectcraft"),
 ]
 HOME = Path.home()
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 GITHUB_REPO = "wildcardcharacter/CraftUpdater-ArtCraft-App-Updater-for-Linux"
 REPOS = HOME / "git"
 BIN_DIR = HOME / ".local" / "bin"
@@ -689,12 +689,24 @@ class CraftUpdater(tk.Tk):
         app_header.pack(fill="x", pady=(0, 12))
         self.apps_label = ttk.Label(app_header, text="", style="Section.TLabel")
         self.apps_label.pack(side="left")
+        self.force_var = tk.BooleanVar(value=False)
+        self.force_check = ttk.Checkbutton(app_header, text="", variable=self.force_var)
+        self.force_check.pack(side="left", padx=(14, 0))
         self.filter_var = tk.StringVar()
         self.filter_var.trace_add("write", self._filter_apps)
         self.filter_entry = ttk.Entry(app_header, textvariable=self.filter_var, width=22)
         self.filter_entry.pack(side="right")
         self.search_label = ttk.Label(app_header, text="", style="CardLabel.TLabel")
         self.search_label.pack(side="right", padx=(0, 8))
+
+        app_controls = ttk.Frame(app_card, style="Card.TFrame")
+        app_controls.pack(fill="x", pady=(0, 12))
+        self.select_installed_btn = ttk.Button(app_controls, text="", command=self._select_installed)
+        self.select_installed_btn.pack(side="left")
+        self.update_btn = ttk.Button(app_controls, text="", style="Primary.TButton", command=self._update_selected)
+        self.update_btn.pack(side="left", padx=8)
+        self.select_all_btn = ttk.Button(app_controls, text="", command=self._select_all)
+        self.select_all_btn.pack(side="right")
 
         tree_frame = ttk.Frame(app_card, style="Card.TFrame")
         tree_frame.pack(fill="both", expand=True)
@@ -718,21 +730,16 @@ class CraftUpdater(tk.Tk):
             item = self.tree.insert("", "end", text=name, values=("Prüfe …", "—", "—", "—"))
             self.items[item] = (name, package)
 
-        app_controls = ttk.Frame(app_card, style="Card.TFrame")
-        app_controls.pack(fill="x", pady=(12, 0))
-        self.select_installed_btn = ttk.Button(app_controls, text="", command=self._select_installed)
-        self.select_installed_btn.pack(side="left")
-        self.update_btn = ttk.Button(app_controls, text="", style="Primary.TButton", command=self._update_selected)
-        self.update_btn.pack(side="left", padx=8)
-        self.select_all_btn = ttk.Button(app_controls, text="", command=self._select_all)
-        self.select_all_btn.pack(side="right")
-
         log_header = ttk.Frame(log_card, style="Card.TFrame")
         log_header.pack(fill="x", pady=(0, 12))
         self.activity_label = ttk.Label(log_header, text="", style="Section.TLabel")
         self.activity_label.pack(side="left")
         self.clear_log_btn = ttk.Button(log_header, text="", command=self._clear_log)
         self.clear_log_btn.pack(side="right")
+        self.cancel_btn = ttk.Button(log_header, text="", command=self._cancel_operation, state="disabled")
+        self.cancel_btn.pack(side="right", padx=(0, 8))
+        self.close_btn = ttk.Button(log_header, text="", command=self._close_window)
+        self.close_btn.pack(side="right", padx=(0, 8))
         self.log = tk.Text(log_card, wrap="word", state="disabled", height=18,
                            background="#172033", foreground="#dbe4f3", insertbackground="#ffffff",
                            relief="flat", borderwidth=0, padx=12, pady=12,
@@ -746,15 +753,8 @@ class CraftUpdater(tk.Tk):
         footer.pack(fill="x", pady=(16, 0))
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(footer, textvariable=self.status_var, style="Subtitle.TLabel").pack(side="left")
-        self.force_var = tk.BooleanVar(value=False)
-        self.force_check = ttk.Checkbutton(footer, text="", variable=self.force_var)
-        self.force_check.pack(side="left", padx=(18, 0))
         self.progress = ttk.Progressbar(footer, mode="indeterminate", length=130)
         self.progress.pack(side="right", padx=(12, 0))
-        self.cancel_btn = ttk.Button(footer, text="", command=self._cancel_operation, state="disabled")
-        self.cancel_btn.pack(side="right", padx=(0, 8))
-        self.close_btn = ttk.Button(footer, text="", command=self._close_window)
-        self.close_btn.pack(side="right", padx=(0, 8))
 
     def _stat_card(self, parent, title, value):
         card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 12))

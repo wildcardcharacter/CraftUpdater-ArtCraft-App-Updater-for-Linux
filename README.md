@@ -71,10 +71,10 @@ Build a Debian package with the application menu entry and scalable icon:
 ./build-deb.sh
 ```
 
-The package is created at `dist/craft-updater_0.2.0_all.deb`. Install it with:
+The package is created at `dist/craft-updater_0.2.1_all.deb`. Install it with:
 
 ```sh
-sudo apt install ./dist/craft-updater_0.2.0_all.deb
+sudo apt install ./dist/craft-updater_0.2.1_all.deb
 ```
 
 You can pass a package version to the build script, for example `./build-deb.sh 0.3.0`.
@@ -83,7 +83,7 @@ You can pass a package version to the build script, for example `./build-deb.sh 
 
 Use **Update CraftUpdater** in the window header to check the latest GitHub release. When a newer version is available, CraftUpdater displays its release notes. Choosing **Install update** downloads the matching `.deb` asset and opens the system authentication prompt to install it. The installer closes after installation and offers to start the updated version. This self-update is available when CraftUpdater was installed from a Debian package; source installations should be updated by downloading or building the newer package manually.
 
-Click **Check for updates**, select the apps you want to update, then click **Update selected** below the app list. CraftUpdater shows a confirmation dialog when the operation finishes successfully.
+Click **Check for updates**, select the apps you want to update, then click **Update selected** above the app list. CraftUpdater shows a confirmation dialog when the operation finishes successfully.
 
 ## How updates work
 
