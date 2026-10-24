@@ -12,6 +12,9 @@ import shlex
 import os
 import signal
 import json
+import re
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from functools import lru_cache
@@ -29,6 +32,8 @@ APPS = [
     ("FilmCraft", "filmcraft"), ("EffectCraft", "effectcraft"),
 ]
 HOME = Path.home()
+APP_VERSION = "0.2.0"
+GITHUB_REPO = "wildcardcharacter/CraftUpdater-ArtCraft-App-Updater-for-Linux"
 REPOS = HOME / "git"
 BIN_DIR = HOME / ".local" / "bin"
 DATA_DIR = Path.home() / ".local" / "share"
@@ -46,7 +51,7 @@ DESKTOP_DIRS = (
 
 TEXTS = {
     "de": {
-        "subtitle": "Deine ArtCraft-Apps an einem Ort verwalten", "language": "Sprache",
+        "subtitle": "Deine ArtCraft-Apps an einem Ort verwalten", "version_label": "Version {}", "language": "Sprache",
         "check": "Updates prüfen", "installed": "Installiert", "selected": "Ausgewählt",
         "sources": "Quellcode vorhanden", "apps": "Deine Apps", "search": "Suchen",
         "updates": "Updates offen", "app": "Anwendung", "status": "Status",
@@ -79,9 +84,19 @@ TEXTS = {
         "version_unknown": "Unbekannt",
         "update_complete_title": "Update abgeschlossen",
         "update_complete_message": "Der Update-Vorgang ist abgeschlossen.\n\nVerarbeitet: {}",
+        "self_update": "CraftUpdater aktualisieren", "self_checking": "Prüfe CraftUpdater-Updates …",
+        "self_current_title": "CraftUpdater ist aktuell", "self_current": "Du verwendest bereits CraftUpdater {}.",
+        "self_available_title": "CraftUpdater-Update verfügbar", "self_available": "Version {} ist verfügbar (installiert: {}).\n\n{}",
+        "self_release_notes": "Änderungen", "self_install": "Update installieren", "self_later": "Später",
+        "self_downloading": "CraftUpdater {} wird heruntergeladen …", "self_installing": "Update wird installiert …",
+        "self_installed_title": "Update installiert", "self_installed": "CraftUpdater {} wurde installiert. Jetzt neu starten?",
+        "self_restart": "Jetzt neu starten", "self_restart_failed": "Das Update wurde installiert, aber CraftUpdater konnte nicht automatisch neu gestartet werden. Bitte starte es über das Anwendungsmenü.",
+        "self_source_install": "Das Selbstupdate ist nur für die Debian-Paketinstallation verfügbar. Installiere CraftUpdater zuerst mit der bereitgestellten .deb-Datei.",
+        "self_no_release": "Auf GitHub wurde noch kein veröffentlichtes CraftUpdater-Update gefunden.",
+        "self_error": "CraftUpdater konnte nicht aktualisiert werden: {}",
     },
     "en": {
-        "subtitle": "Manage your ArtCraft apps in one place", "language": "Language",
+        "subtitle": "Manage your ArtCraft apps in one place", "version_label": "Version {}", "language": "Language",
         "check": "Check for updates", "installed": "Installed", "selected": "Selected",
         "sources": "Source available", "apps": "Your apps", "search": "Search",
         "updates": "Updates available", "app": "Application", "status": "Status",
@@ -114,6 +129,16 @@ TEXTS = {
         "version_unknown": "Unknown",
         "update_complete_title": "Update complete",
         "update_complete_message": "The update operation has finished.\n\nProcessed: {}",
+        "self_update": "Update CraftUpdater", "self_checking": "Checking for CraftUpdater updates …",
+        "self_current_title": "CraftUpdater is up to date", "self_current": "You are already using CraftUpdater {}.",
+        "self_available_title": "CraftUpdater update available", "self_available": "Version {} is available (installed: {}).\n\n{}",
+        "self_release_notes": "Release notes", "self_install": "Install update", "self_later": "Later",
+        "self_downloading": "Downloading CraftUpdater {} …", "self_installing": "Installing update …",
+        "self_installed_title": "Update installed", "self_installed": "CraftUpdater {} was installed. Restart now?",
+        "self_restart": "Restart now", "self_restart_failed": "The update was installed, but CraftUpdater could not restart automatically. Please launch it from the application menu.",
+        "self_source_install": "Self-updates are available only for the Debian package installation. Install CraftUpdater from the provided .deb package first.",
+        "self_no_release": "No published CraftUpdater update was found on GitHub yet.",
+        "self_error": "CraftUpdater could not be updated: {}",
     },
 }
 
@@ -127,6 +152,25 @@ class Installation:
 def _message(translate, key: str, *args) -> str:
     template = translate(key) if translate else TEXTS["de"][key]
     return template.format(*args)
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    numbers = re.findall(r"\d+", version)
+    return tuple(int(number) for number in numbers) or (0,)
+
+
+def _installed_deb_version() -> str | None:
+    try:
+        result = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Status}\n${Version}", "craft-updater"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    lines = result.stdout.splitlines()
+    if result.returncode or len(lines) < 2 or lines[0] != "install ok installed":
+        return None
+    return lines[1].split(":")[-1]
 
 
 class OperationCancelled(Exception):
@@ -498,6 +542,7 @@ class CraftUpdater(tk.Tk):
         self.close_when_done = False
         self.latest_versions = {}
         self.commit_deltas = {}
+        self.app_version = _installed_deb_version() or APP_VERSION
         self.language = self._load_language()
         self._configure_style()
         self._build_ui()
@@ -532,8 +577,10 @@ class CraftUpdater(tk.Tk):
 
     def _apply_language(self):
         self.subtitle_label.configure(text=self._t("subtitle"))
+        self.version_label.configure(text=self._t("version_label").format(self.app_version))
         self.language_label.configure(text=self._t("language"))
         self.check_btn.configure(text=self._t("check"))
+        self.self_update_btn.configure(text=self._t("self_update"))
         self.stat_titles[0].configure(text=self._t("installed"))
         self.stat_titles[1].configure(text=self._t("selected"))
         self.stat_titles[2].configure(text=self._t("sources"))
@@ -603,6 +650,8 @@ class CraftUpdater(tk.Tk):
         ttk.Label(title_area, text="CraftUpdater", style="Title.TLabel").pack(anchor="w")
         self.subtitle_label = ttk.Label(title_area, text="", style="Subtitle.TLabel")
         self.subtitle_label.pack(anchor="w", pady=(3, 0))
+        self.version_label = ttk.Label(title_area, text="", style="Subtitle.TLabel")
+        self.version_label.pack(anchor="w", pady=(2, 0))
         language_area = ttk.Frame(header)
         language_area.pack(side="right", padx=(12, 0))
         self.language_label = ttk.Label(language_area, text="", style="Subtitle.TLabel")
@@ -614,6 +663,8 @@ class CraftUpdater(tk.Tk):
         self.language_combo.bind("<<ComboboxSelected>>", self._set_language)
         self.check_btn = ttk.Button(header, text="Updates prüfen", command=self._check_updates)
         self.check_btn.pack(side="right", anchor="center")
+        self.self_update_btn = ttk.Button(header, text="", command=self._check_self_update)
+        self.self_update_btn.pack(side="right", anchor="center", padx=(0, 8))
 
         stats = ttk.Frame(root)
         stats.pack(fill="x", pady=(0, 18))
@@ -788,22 +839,27 @@ class CraftUpdater(tk.Tk):
             return []
         return [self.items[item] for item in selected]
 
-    def _start(self, title, operation):
+    def _start(self, title, operation, *, cancellable=True):
         if self.busy:
             return
         self.busy = True
         self.cancel_event = threading.Event()
+        self.operation_cancellable = cancellable
         self.check_btn.configure(state="disabled")
+        self.self_update_btn.configure(state="disabled")
         self.update_btn.configure(state="disabled")
         self.language_combo.configure(state="disabled")
-        self.cancel_btn.configure(state="normal")
+        self.cancel_btn.configure(state="normal" if cancellable else "disabled")
+        if not cancellable:
+            self.close_btn.configure(state="disabled")
         self.status_var.set(self._t("running").format(title))
         self.progress.start(12)
         self._append(f"\n── {title} ──")
         def worker():
             try:
-                operation()
-                self.events.put(("done", None))
+                completed = operation()
+                if completed is not False:
+                    self.events.put(("done", None))
             except OperationCancelled:
                 self.events.put(("cancelled", None))
             except Exception as exc:
@@ -811,13 +867,15 @@ class CraftUpdater(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _cancel_operation(self):
-        if self.cancel_event and self.busy:
+        if self.cancel_event and self.busy and self.operation_cancellable:
             self.cancel_event.set()
             self.cancel_btn.configure(state="disabled")
             self.status_var.set(self._t("cancelling"))
 
     def _close_window(self):
         if self.busy:
+            if not self.operation_cancellable:
+                return
             self.close_when_done = True
             if self.cancel_event:
                 self.cancel_event.set()
@@ -871,6 +929,89 @@ class CraftUpdater(tk.Tk):
             self.events.put(("update_complete", ", ".join(name for name, _package in selected)))
         self._start(self._t("update_run"), operation)
 
+    def _check_self_update(self):
+        translate = lambda key: TEXTS[self.language][key]
+        self.self_update_btn.configure(state="disabled")
+        self.status_var.set(self._t("self_checking"))
+
+        def operation():
+            installed = _installed_deb_version()
+            if not installed:
+                self.events.put(("self_update_source", None))
+                return
+            request = urllib.request.Request(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "CraftUpdater"},
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    release = json.loads(response.read(2_000_000).decode("utf-8"))
+            except urllib.error.HTTPError as error:
+                if error.code == 404:
+                    self.events.put(("self_update_none", None))
+                    return
+                raise RuntimeError(f"GitHub API: HTTP {error.code}") from error
+            tag = str(release.get("tag_name", "")).strip()
+            version = tag.removeprefix("v").removeprefix("V")
+            if not version:
+                raise RuntimeError("GitHub release has no version tag")
+            if _version_key(version) <= _version_key(installed):
+                self.events.put(("self_update_current", installed))
+                return
+            asset_name = f"craft-updater_{version}_all.deb"
+            asset = next((item for item in release.get("assets", [])
+                          if item.get("name") == asset_name), None)
+            if not asset or not str(asset.get("browser_download_url", "")).startswith("https://"):
+                raise RuntimeError(f"Release asset {asset_name} is missing")
+            self.events.put(("self_update_available", {
+                "version": version, "installed": installed,
+                "notes": str(release.get("body", "")).strip(),
+                "url": asset["browser_download_url"], "name": asset_name,
+            }))
+
+        self._start(self._t("self_checking"), operation)
+
+    def _install_self_update(self, release):
+        self.self_update_btn.configure(state="disabled")
+        self.status_var.set(self._t("self_downloading").format(release["version"]))
+
+        def operation():
+            cache_dir = Path.home() / ".cache" / "craft-updater" / "updates"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            package = cache_dir / release["name"]
+            request = urllib.request.Request(
+                release["url"], headers={"User-Agent": "CraftUpdater"},
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response, package.open("wb") as output:
+                    shutil.copyfileobj(response, output)
+                if package.stat().st_size < 1024:
+                    raise RuntimeError("Downloaded Debian package is unexpectedly small")
+                self.events.put(("self_update_installing", None))
+                result = subprocess.run(
+                    ["pkexec", "apt-get", "install", "-y", str(package)],
+                    capture_output=True, text=True, timeout=900, check=False,
+                )
+                if result.returncode:
+                    detail = (result.stderr or result.stdout).strip().splitlines()
+                    raise RuntimeError(detail[-1] if detail else f"Installer exited with code {result.returncode}")
+                self.events.put(("self_update_installed", release["version"]))
+                return False
+            except Exception:
+                package.unlink(missing_ok=True)
+                raise
+
+        self._start(self._t("self_installing"), operation, cancellable=False)
+
+    def _restart_after_self_update(self):
+        executable = Path("/usr/bin/craft-updater")
+        try:
+            subprocess.Popen([str(executable)], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            messagebox.showinfo(self._t("self_installed_title"), self._t("self_restart_failed"))
+        self.destroy()
+
     def _drain_events(self):
         try:
             while True:
@@ -890,6 +1031,34 @@ class CraftUpdater(tk.Tk):
                         self._t("update_complete_title"),
                         self._t("update_complete_message").format(value),
                     )
+                elif kind == "self_update_source":
+                    self.self_update_btn.configure(state="normal")
+                    self._finish_operation(self._t("ready"))
+                    messagebox.showinfo(self._t("self_update"), self._t("self_source_install"))
+                elif kind == "self_update_none":
+                    self.self_update_btn.configure(state="normal")
+                    self._finish_operation(self._t("ready"))
+                    messagebox.showinfo(self._t("self_update"), self._t("self_no_release"))
+                elif kind == "self_update_current":
+                    self.self_update_btn.configure(state="normal")
+                    self._finish_operation(self._t("ready"))
+                    messagebox.showinfo(self._t("self_current_title"), self._t("self_current").format(value))
+                elif kind == "self_update_available":
+                    self.self_update_btn.configure(state="normal")
+                    self._finish_operation(self._t("ready"))
+                    self._show_self_update_dialog(value)
+                elif kind == "self_update_installing":
+                    self.status_var.set(self._t("self_installing"))
+                elif kind == "self_update_installed":
+                    self._finish_operation(self._t("ready"))
+                    if messagebox.askyesno(
+                        self._t("self_installed_title"),
+                        self._t("self_installed").format(value),
+                        detail=self._t("self_restart"),
+                    ):
+                        self._restart_after_self_update()
+                    else:
+                        self.self_update_btn.configure(state="normal")
                 elif kind == "error":
                     self._append(self._t("error_prefix") + " " + value)
                     self._refresh_status()
@@ -908,12 +1077,38 @@ class CraftUpdater(tk.Tk):
     def _finish_operation(self, status):
         self.busy = False
         self.cancel_event = None
+        self.operation_cancellable = True
         self.check_btn.configure(state="normal")
+        self.self_update_btn.configure(state="normal")
         self.update_btn.configure(state="normal")
         self.language_combo.configure(state="readonly")
         self.cancel_btn.configure(state="disabled")
+        self.close_btn.configure(state="normal")
         self.progress.stop()
         self.status_var.set(status)
+
+    def _show_self_update_dialog(self, release):
+        dialog = tk.Toplevel(self)
+        dialog.title(self._t("self_available_title"))
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+        dialog.geometry("560x390")
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=self._t("self_available").format(
+            release["version"], release["installed"], ""
+        ).rstrip(), style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        ttk.Label(frame, text=self._t("self_release_notes"), style="Section.TLabel").pack(anchor="w")
+        notes = tk.Text(frame, wrap="word", height=12, state="normal", padx=10, pady=8)
+        notes.pack(fill="both", expand=True, pady=(6, 14))
+        notes.insert("1.0", release["notes"] or self._t("self_no_release"))
+        notes.configure(state="disabled")
+        actions = ttk.Frame(frame)
+        actions.pack(fill="x")
+        ttk.Button(actions, text=self._t("self_later"), command=dialog.destroy).pack(side="right")
+        ttk.Button(actions, text=self._t("self_install"), style="Primary.TButton",
+                   command=lambda: (dialog.destroy(), self._install_self_update(release))).pack(side="right", padx=(0, 8))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Markus <wildcardcharacter@icloud.com>
-Depends: python3, python3-tk, git, coreutils, pkg-config, cargo, build-essential, libgtk-3-dev, libasound2-dev
+Depends: python3, python3-tk, git, coreutils, pkg-config, cargo, build-essential, libgtk-3-dev, libasound2-dev, pkexec
 Description: GUI updater and source builder for ArtCraft applications
  CraftUpdater checks ArtCraft repositories, builds selected apps from source,
  and installs them into the user's local bin directory.
