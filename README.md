@@ -8,6 +8,10 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 
 ![CraftUpdater main window](assets/img/main-window.png)
 
+**Installing a CraftUpdater update**
+
+![CraftUpdater update dialog with release notes](assets/img/updater_CraftUpdater.png)
+
 **Building an update**
 
 ![CraftUpdater building an update](assets/img/main-window-2.png)
