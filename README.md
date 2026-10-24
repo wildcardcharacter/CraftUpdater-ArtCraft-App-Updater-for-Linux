@@ -15,6 +15,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 - Get a completion dialog listing the apps processed after a successful update operation.
 - Switch the interface between German and English.
 - View build output in the app and in a persistent log file.
+- Open PDFs with PdfCraft from the file manager using **Open With**. The installed desktop entry passes selected PDF paths correctly; CraftUpdater keeps the `%U` file argument unquoted so the desktop environment can expand it.
 
 ## Supported applications
 

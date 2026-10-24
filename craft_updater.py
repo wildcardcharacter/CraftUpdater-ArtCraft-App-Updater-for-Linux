@@ -363,7 +363,13 @@ def install_desktop_integration(repo: Path, package: str, installed: Path, log, 
             elif detected_command and detected_command.kind == "Snap":
                 app_args = exec_parts[3:]
             tokens = [str(installed), *app_args]
-            entry["Exec"] = " ".join('"' + token.replace("\\", "\\\\").replace('"', '\\"') + '"' for token in tokens)
+            # Desktop entry field codes (such as %U) must remain unquoted so
+            # the file manager expands them to the selected file URI(s).
+            entry["Exec"] = " ".join(
+                token if token in {"%f", "%F", "%u", "%U", "%i", "%c", "%k"}
+                else '"' + token.replace("\\", "\\\\").replace('"', '\\"') + '"'
+                for token in tokens
+            )
         try_exec = entry.get("TryExec", "")
         if try_exec:
             entry["TryExec"] = str(installed)
