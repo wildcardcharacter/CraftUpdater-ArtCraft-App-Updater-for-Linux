@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=CraftUpdater
+GenericName=ArtCraft App Updater
+Comment=Check, build, and update ArtCraft applications
+Exec=craft-updater
+Icon=craft-updater
+Terminal=false
+Type=Application
+Categories=Utility;Development;
+StartupNotify=true

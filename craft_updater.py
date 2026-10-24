@@ -138,11 +138,12 @@ def _check_cancel(cancel_event):
         raise OperationCancelled()
 
 
-def run(args: list[str], *, cwd: Path | None = None, on_line=None, translate=None, cancel_event=None) -> str:
+def run(args: list[str], *, cwd: Path | None = None, on_line=None, translate=None,
+        cancel_event=None, env: dict[str, str] | None = None) -> str:
     _check_cancel(cancel_event)
     proc = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True, bufsize=1,
-                            start_new_session=True)
+                            start_new_session=True, env=env)
     output = []
     assert proc.stdout is not None
     lines = queue.Queue()
@@ -457,7 +458,9 @@ def update_app(repo_name: str, package: str, force: bool, log, translate=None, c
 
         _check_cancel(cancel_event)
         log(_message(translate, "building", package))
-        run(["nice", "-n", "10", "cargo", "build", "--release", "--locked", "-p", package], cwd=repo, on_line=log, translate=translate, cancel_event=cancel_event)
+        build_env = os.environ.copy()
+        build_env.setdefault("RUST_MIN_STACK", "16777216")
+        run(["nice", "-n", "10", "cargo", "build", "--release", "--locked", "-p", package], cwd=repo, on_line=log, translate=translate, cancel_event=cancel_event, env=build_env)
         binary = repo / "target" / "release" / package
         if not binary.is_file():
             raise RuntimeError(_message(translate, "binary_missing", binary))

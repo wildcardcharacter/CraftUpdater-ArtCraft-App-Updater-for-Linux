@@ -2,7 +2,19 @@
 
 A lightweight Linux desktop app for checking, building, and updating the open source ArtCraft applications from GitHub.
 
-![CraftUpdater main window](main-window.png)
+## Screenshots
+
+**App list and available updates**
+
+![CraftUpdater main window](assets/img/main-window.png)
+
+**Building an update**
+
+![CraftUpdater building an update](assets/img/main-window-2.png)
+
+**Completion message**
+
+![CraftUpdater update complete message](assets/img/update_finished.png)
 
 ## Features
 
@@ -50,6 +62,22 @@ To add CraftUpdater to your application menu and install a command in `~/.local/
 ./install.sh
 ```
 
+## Debian package
+
+Build a Debian package with the application menu entry and scalable icon:
+
+```sh
+./build-deb.sh
+```
+
+The package is created at `dist/craft-updater_0.1.0_all.deb`. Install it with:
+
+```sh
+sudo apt install ./dist/craft-updater_0.1.0_all.deb
+```
+
+You can pass a package version to the build script, for example `./build-deb.sh 0.2.0`.
+
 Click **Check for updates**, select the apps you want to update, then click **Update selected** below the app list. CraftUpdater shows a confirmation dialog when the operation finishes successfully.
 
 ## How updates work
@@ -57,6 +85,8 @@ Click **Check for updates**, select the apps you want to update, then click **Up
 CraftUpdater clones each selected project from `github.com/storytold/<App>` and builds it with Cargo. The resulting executable is installed under `~/.local/bin`; system managed files are left untouched. The first build can take several minutes and use multiple gigabytes of disk space.
 
 Before a build, CraftUpdater checks for the required build tools and selected system libraries, then checks available disk space. You can cancel Git and build operations. A new executable is copied to a temporary file and replaces the managed executable only after the build succeeds.
+
+Builds set Rust's minimum thread stack to 16 MiB to avoid compiler crashes reported by LLVM during release builds on some systems. If a build still fails, check the activity log or `~/.local/state/craft-updater-gui/last-run.log` for the compiler output; the installed executable is left untouched when the build fails.
 
 Installed commit versions are available for apps previously built by CraftUpdater. For installations made by other tools, the installed commit is shown as unknown. If an app's source repository has not been cloned yet, the latest GitHub commit is shown, while the commit count is unknown until the repository is available locally.
 
