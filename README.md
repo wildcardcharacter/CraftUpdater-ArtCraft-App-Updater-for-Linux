@@ -4,7 +4,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 
 ## Screenshots
 
-**App list and available updates**
+**Application list, installation status, and activity log**
 
 ![CraftUpdater main window](assets/img/main-window.png)
 
@@ -12,7 +12,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 
 ![CraftUpdater update dialog with release notes](assets/img/updater_CraftUpdater.png)
 
-**Building an update**
+**Checking for updates and viewing activity**
 
 ![CraftUpdater building an update](assets/img/main-window-2.png)
 
@@ -25,6 +25,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 - Check GitHub for the latest commit of each supported app.
 - See installed and available commit versions, plus the number of new commits when the local source repository is available.
 - Detect common existing installations, including native programs, Flatpak, Snap, and AppImages.
+- Rescan every supported app and show the detected installation type and path in the activity log. Apps without a detected installation are reported as not installed.
 - Build selected apps from source and install them into `~/.local/bin`.
 - Check build tools, required development libraries, and free disk space before starting a build.
 - Cancel a running operation. The existing managed executable is kept until the replacement has built successfully.
@@ -32,6 +33,7 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 - Switch the interface between German and English.
 - Check GitHub Releases for CraftUpdater updates, review release notes, and install the new Debian package from the GUI with an administrator authentication prompt.
 - View build output in the app and in a persistent log file.
+- Resize table columns by dragging their dividers, or double-click a divider to fit the column to its heading and visible values. Resize the table and activity log areas by dragging their divider.
 - Open PDFs with PdfCraft from the file manager using **Open With**. The installed desktop entry passes selected PDF paths correctly; CraftUpdater keeps the `%U` file argument unquoted so the desktop environment can expand it.
 
 ## Supported applications
@@ -48,7 +50,7 @@ PdfCraft, WordCraft, GridCraft, DeckCraft, PhotoCraft, LightCraft, VectorCraft, 
 On Debian or Ubuntu, install the common prerequisites with:
 
 ```sh
-sudo apt install python3 python3-tk git cargo build-essential pkg-config libgtk-3-dev libasound2-dev
+sudo apt install python3 python3-tk git cargo build-essential pkg-config libgtk-3-dev libasound2-dev pkexec
 ```
 
 ## Run
@@ -87,7 +89,7 @@ You can pass a package version to the build script, for example `./build-deb.sh 
 
 Use **Update CraftUpdater** in the window header to check the latest GitHub release. When a newer version is available, CraftUpdater displays its release notes. Choosing **Install update** downloads the matching `.deb` asset and opens the system authentication prompt to install it. The installer closes after installation and offers to start the updated version. This self-update is available when CraftUpdater was installed from a Debian package; source installations should be updated by downloading or building the newer package manually.
 
-Click **Check for updates**, select the apps you want to update, then click **Update selected** above the app list. CraftUpdater shows a confirmation dialog when the operation finishes successfully.
+Click **Check app updates** to query GitHub, select apps in the table, then click **Update selected apps**. Use **Rescan installations** to update the detected installation statuses and write the detected type and path for each app to the activity log. The status **Source available** means the app's source repository exists locally; it does not mean the app is installed.
 
 ## How updates work
 

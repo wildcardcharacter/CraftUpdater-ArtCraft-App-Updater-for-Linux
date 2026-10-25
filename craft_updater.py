@@ -13,6 +13,7 @@ import os
 import signal
 import json
 import re
+from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import messagebox, ttk
 
 
@@ -52,13 +54,13 @@ DESKTOP_DIRS = (
 TEXTS = {
     "de": {
         "subtitle": "Deine ArtCraft-Apps an einem Ort verwalten", "version_label": "Version {}", "language": "Sprache",
-        "check": "Updates prüfen", "installed": "Installiert", "selected": "Ausgewählt",
+        "check": "App-Updates prüfen", "installed": "Installiert", "selected": "Ausgewählt",
         "sources": "Quellcode vorhanden", "apps": "Deine Apps", "search": "Suchen",
-        "updates": "Updates offen", "app": "Anwendung", "status": "Status",
-        "installed_version": "Installiert", "available_version": "Neueste Version", "commits": "Commits",
-        "select_installed": "Installierte auswählen",
-        "select_all": "Alle auswählen", "activity": "Aktivität", "clear": "Ansicht leeren",
-        "ready": "Bereit", "force": "Neuaufbau erzwingen", "update_selected": "Ausgewählte aktualisieren",
+        "updates": "Updates offen", "app": "Anwendung", "status": "Installationsstatus",
+        "installed_version": "Installierte Version", "available_version": "Neueste Version", "commits": "Neue Commits",
+        "select_installed": "Installierte markieren",
+        "select_all": "Alle markieren", "activity": "Aktivitätsprotokoll", "clear": "Protokoll leeren",
+        "ready": "Bereit", "force": "Neuaufbau erzwingen", "update_selected": "Markierte Apps aktualisieren",
         "none_title": "Keine Auswahl", "none_selected": "Bitte wähle mindestens eine App aus.",
         "check_run": "Updateprüfung", "update_run": "App-Update", "running": "{} läuft …",
         "command_failed": "Befehl fehlgeschlagen", "fetch": "Änderungen abrufen …",
@@ -70,12 +72,21 @@ TEXTS = {
         "no_desktop": "Kein passender Menüeintrag im Quellcode gefunden; installiert wurde nur das Programm.",
         "install_path": "Installiert: {}", "already_starts": "{}: Update startet",
         "app_completed": "{}: abgeschlossen", "checking_app": "{}: prüfe GitHub …",
+        "progress_apps": "App {} von {}: {}", "result_success": "Erfolgreich", "result_failed": "Fehlgeschlagen",
+        "result_cancelled": "Abgebrochen", "results_title": "Update-Ergebnisse", "results_summary": "Erfolgreich: {} · Fehlgeschlagen: {}",
+        "last_build": "Letzter Build",
+        "refresh_view": "Installationen neu suchen", "remove_app": "Markierte App entfernen", "remove_title": "App löschen",
+        "inventory_checked": "Installationssuche für {}: {}",
+        "inventory_not_found": "nicht installiert (in den geprüften Installationsorten nicht gefunden)",
+        "inventory_refresh_done": "Installationsstatus aktualisiert.",
+        "remove_confirm": "Die von CraftUpdater verwaltete Installation von {} einschließlich Menüeinträgen und Build-Informationen löschen?",
+        "remove_done": "Die verwaltete Installation von {} wurde gelöscht.", "remove_unmanaged": "{} wird nicht von CraftUpdater verwaltet und kann hier nicht gelöscht werden.",
         "waiting_clone": "Noch nicht geklont", "commits_waiting": "{} neue Commits", "up_to_date": "Aktuell",
         "installed_status": "Installiert · {}", "local": "Lokal", "system": "System",
         "source_status": "Quellcode vorhanden", "missing_status": "Nicht installiert",
         "failed": "Vorgang fehlgeschlagen", "error_title": "Vorgang fehlgeschlagen", "error_prefix": "FEHLER:",
-        "unknown_version": "Unbekannt", "no_version": "—", "cancel": "Abbrechen",
-        "cancelling": "Abbruch läuft …", "cancelled": "Abgebrochen", "close": "Schließen", "preflight": "Systemprüfung",
+        "unknown_version": "Unbekannt", "no_version": "—", "cancel": "Vorgang abbrechen",
+        "cancelling": "Abbruch läuft …", "cancelled": "Abgebrochen", "close": "Fenster schließen", "preflight": "Systemprüfung",
         "preflight_ok": "Voraussetzungen erfüllt; {} GB frei.",
         "missing_tools": "Benötigte Programme fehlen: {}. Installiere Git, Rust/Cargo, pkg-config und nice.",
         "missing_package": "Systembibliothek {} fehlt. Installiere das passende Entwicklungspaket.",
@@ -97,13 +108,13 @@ TEXTS = {
     },
     "en": {
         "subtitle": "Manage your ArtCraft apps in one place", "version_label": "Version {}", "language": "Language",
-        "check": "Check for updates", "installed": "Installed", "selected": "Selected",
+        "check": "Check app updates", "installed": "Installed", "selected": "Selected",
         "sources": "Source available", "apps": "Your apps", "search": "Search",
-        "updates": "Updates available", "app": "Application", "status": "Status",
-        "installed_version": "Installed", "available_version": "Latest version", "commits": "Commits",
-        "select_installed": "Select installed",
-        "select_all": "Select all", "activity": "Activity", "clear": "Clear view",
-        "ready": "Ready", "force": "Force rebuild", "update_selected": "Update selected",
+        "updates": "Updates available", "app": "Application", "status": "Installation status",
+        "installed_version": "Installed version", "available_version": "Latest version", "commits": "New commits",
+        "select_installed": "Select installed apps",
+        "select_all": "Select all apps", "activity": "Activity log", "clear": "Clear log",
+        "ready": "Ready", "force": "Force rebuild", "update_selected": "Update selected apps",
         "none_title": "Nothing selected", "none_selected": "Select at least one app.",
         "check_run": "Checking for updates", "update_run": "App update", "running": "{} in progress …",
         "command_failed": "Command failed", "fetch": "Fetching changes …",
@@ -115,12 +126,21 @@ TEXTS = {
         "no_desktop": "No matching menu entry found in the source; only the program was installed.",
         "install_path": "Installed: {}", "already_starts": "{}: starting update",
         "app_completed": "{}: complete", "checking_app": "{}: checking GitHub …",
+        "progress_apps": "App {} of {}: {}", "result_success": "Succeeded", "result_failed": "Failed", "result_cancelled": "Cancelled",
+        "results_title": "Update results", "results_summary": "Succeeded: {} · Failed: {}",
+        "last_build": "Last build",
+        "refresh_view": "Rescan installations", "remove_app": "Remove selected app", "remove_title": "Remove app",
+        "inventory_checked": "Installation search for {}: {}",
+        "inventory_not_found": "not installed (not found in the locations checked)",
+        "inventory_refresh_done": "Installation status refreshed.",
+        "remove_confirm": "Delete CraftUpdater's managed installation of {}, including menu entries and build records?",
+        "remove_done": "The managed installation of {} was removed.", "remove_unmanaged": "{} is not managed by CraftUpdater and cannot be removed here.",
         "waiting_clone": "Not cloned yet", "commits_waiting": "{} new commits", "up_to_date": "Up to date",
         "installed_status": "Installed · {}", "local": "Local", "system": "System",
         "source_status": "Source available", "missing_status": "Not installed",
         "failed": "Operation failed", "error_title": "Operation failed", "error_prefix": "ERROR:",
-        "unknown_version": "Unknown", "no_version": "—", "cancel": "Cancel",
-        "cancelling": "Cancelling …", "cancelled": "Cancelled", "close": "Close", "preflight": "Preflight checks",
+        "unknown_version": "Unknown", "no_version": "—", "cancel": "Cancel operation",
+        "cancelling": "Cancelling …", "cancelled": "Cancelled", "close": "Close window", "preflight": "Preflight checks",
         "preflight_ok": "Requirements met; {} GB free.",
         "missing_tools": "Required tools are missing: {}. Install Git, Rust/Cargo, pkg-config and nice.",
         "missing_package": "System library {} is missing. Install its development package.",
@@ -175,6 +195,27 @@ def _installed_deb_version() -> str | None:
 
 class OperationCancelled(Exception):
     pass
+
+
+def _write_build_record(package: str, commit: str, result: str, error: str = "") -> None:
+    BUILD_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    record = {
+        "commit": commit,
+        "result": result,
+        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "error": error,
+    }
+    (BUILD_STATE_DIR / f"{package}.json").write_text(
+        json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def _read_build_record(package: str) -> dict:
+    try:
+        value = json.loads((BUILD_STATE_DIR / f"{package}.json").read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def _check_cancel(cancel_event):
@@ -498,6 +539,7 @@ def update_app(repo_name: str, package: str, force: bool, log, translate=None, c
             if old == head and (BIN_DIR / package).exists():
                 install_desktop_integration(repo, package, BIN_DIR / package, log, translate, cancel_event)
                 log(_message(translate, "already_current"))
+                _write_build_record(package, head, "current")
                 return
 
         _check_cancel(cancel_event)
@@ -523,6 +565,7 @@ def update_app(repo_name: str, package: str, force: bool, log, translate=None, c
         install_desktop_integration(repo, package, installed, log, translate)
         BUILD_STATE_DIR.mkdir(parents=True, exist_ok=True)
         (BUILD_STATE_DIR / f"{package}.commit").write_text(head + "\n")
+        _write_build_record(package, head, "success")
         log(_message(translate, "install_path", installed))
     except OperationCancelled:
         if created_repo and repo.exists():
@@ -534,8 +577,8 @@ class CraftUpdater(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("CraftUpdater")
-        self.geometry("1200x740")
-        self.minsize(1000, 640)
+        self.geometry("1180x820")
+        self.minsize(900, 680)
         self.events: queue.Queue = queue.Queue()
         self.busy = False
         self.cancel_event = None
@@ -580,6 +623,7 @@ class CraftUpdater(tk.Tk):
         self.version_label.configure(text=self._t("version_label").format(self.app_version))
         self.language_label.configure(text=self._t("language"))
         self.check_btn.configure(text=self._t("check"))
+        self.refresh_btn.configure(text=self._t("refresh_view"))
         self.self_update_btn.configure(text=self._t("self_update"))
         self.stat_titles[0].configure(text=self._t("installed"))
         self.stat_titles[1].configure(text=self._t("selected"))
@@ -598,6 +642,7 @@ class CraftUpdater(tk.Tk):
         self.clear_log_btn.configure(text=self._t("clear"))
         self.force_check.configure(text=self._t("force"))
         self.update_btn.configure(text=self._t("update_selected"))
+        self.remove_btn.configure(text=self._t("remove_app"))
         self.cancel_btn.configure(text=self._t("cancel"))
         self.close_btn.configure(text=self._t("close"))
         if not self.busy:
@@ -663,6 +708,8 @@ class CraftUpdater(tk.Tk):
         self.language_combo.bind("<<ComboboxSelected>>", self._set_language)
         self.check_btn = ttk.Button(header, text="Updates prüfen", command=self._check_updates)
         self.check_btn.pack(side="right", anchor="center")
+        self.refresh_btn = ttk.Button(header, text="", command=self._refresh_inventory)
+        self.refresh_btn.pack(side="right", anchor="center", padx=(0, 8))
         self.self_update_btn = ttk.Button(header, text="", command=self._check_self_update)
         self.self_update_btn.pack(side="right", anchor="center", padx=(0, 8))
 
@@ -678,12 +725,12 @@ class CraftUpdater(tk.Tk):
         self._stat_card(stats, "", self.source_count).pack(side="left", fill="x", expand=True, padx=(10, 0))
         self._stat_card(stats, "", self.updates_count).pack(side="left", fill="x", expand=True, padx=(10, 0))
 
-        body = ttk.Frame(root)
+        body = ttk.Panedwindow(root, orient="vertical")
         body.pack(fill="both", expand=True)
         app_card = ttk.Frame(body, style="Card.TFrame", padding=16)
-        app_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
         log_card = ttk.Frame(body, style="Card.TFrame", padding=16)
-        log_card.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        body.add(app_card, weight=7)
+        body.add(log_card, weight=3)
 
         app_header = ttk.Frame(app_card, style="Card.TFrame")
         app_header.pack(fill="x", pady=(0, 12))
@@ -705,29 +752,42 @@ class CraftUpdater(tk.Tk):
         self.select_installed_btn.pack(side="left")
         self.update_btn = ttk.Button(app_controls, text="", style="Primary.TButton", command=self._update_selected)
         self.update_btn.pack(side="left", padx=8)
+        self.remove_btn = ttk.Button(app_controls, text="", command=self._remove_selected)
+        self.remove_btn.pack(side="left")
         self.select_all_btn = ttk.Button(app_controls, text="", command=self._select_all)
         self.select_all_btn.pack(side="right")
 
         tree_frame = ttk.Frame(app_card, style="Card.TFrame")
         tree_frame.pack(fill="both", expand=True)
-        self.tree = ttk.Treeview(tree_frame, columns=("status", "installed", "available", "commits"), show="tree headings", selectmode="extended")
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+        self.tree = ttk.Treeview(tree_frame, columns=("status", "installed", "available", "commits", "last_build"), show="tree headings", selectmode="extended")
         self.tree.heading("#0", text="Anwendung", anchor="w")
-        self.tree.heading("status", text="Status", anchor="w")
-        self.tree.column("#0", width=150, minwidth=125, stretch=True)
-        self.tree.column("status", width=185, minwidth=145, stretch=True)
-        for column, width in (("installed", 92), ("available", 105), ("commits", 65)):
-            self.tree.column(column, width=width, minwidth=65, stretch=False, anchor="center")
+        self.tree.heading("status", text="Installationsstatus", anchor="w")
+        self.tree.column("#0", width=155, minwidth=105, stretch=True)
+        self.tree.column("status", width=210, minwidth=120, stretch=True)
+        self.tree.heading("last_build", text=self._t("last_build"), anchor="w")
+        for column, width in (("installed", 130), ("available", 130), ("commits", 95), ("last_build", 115)):
+            self.tree.column(column, width=width, minwidth=85, stretch=True, anchor="center")
         self.tree.tag_configure("installed", foreground=self.colors["green"])
         self.tree.tag_configure("source", foreground=self.colors["amber"])
         self.tree.tag_configure("missing", foreground=self.colors["muted"])
-        self.tree.pack(side="left", fill="both", expand=True)
+        self.tree.grid(row=0, column=0, sticky="nsew")
         tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
-        tree_scroll.pack(side="right", fill="y")
+        tree_scroll.grid(row=0, column=1, sticky="ns")
         self.tree.bind("<<TreeviewSelect>>", lambda _event: self._update_selection_count())
+        self.tree.bind("<Double-1>", self._tree_double_click)
+        self.tree.bind("<Motion>", self._tree_column_cursor)
+        self.tree.bind("<ButtonPress-1>", self._tree_column_resize_start, add="+")
+        self.tree.bind("<B1-Motion>", self._tree_column_resize)
+        self.tree.bind("<ButtonRelease-1>", self._tree_column_resize_end)
+        self._tree_resize_column = None
+        self._tree_resize_x = 0
+        self._tree_resize_width = 0
         self.items = {}
         for name, package in APPS:
-            item = self.tree.insert("", "end", text=name, values=("Prüfe …", "—", "—", "—"))
+            item = self.tree.insert("", "end", text=name, values=("Prüfe …", "—", "—", "—", "—"))
             self.items[item] = (name, package)
 
         log_header = ttk.Frame(log_card, style="Card.TFrame")
@@ -740,7 +800,7 @@ class CraftUpdater(tk.Tk):
         self.cancel_btn.pack(side="right", padx=(0, 8))
         self.close_btn = ttk.Button(log_header, text="", command=self._close_window)
         self.close_btn.pack(side="right", padx=(0, 8))
-        self.log = tk.Text(log_card, wrap="word", state="disabled", height=18,
+        self.log = tk.Text(log_card, wrap="word", state="disabled", height=7,
                            background="#172033", foreground="#dbe4f3", insertbackground="#ffffff",
                            relief="flat", borderwidth=0, padx=12, pady=12,
                            font=("TkFixedFont", 9), selectbackground="#315ee8")
@@ -753,8 +813,9 @@ class CraftUpdater(tk.Tk):
         footer.pack(fill="x", pady=(16, 0))
         self.status_var = tk.StringVar(value="Bereit")
         ttk.Label(footer, textvariable=self.status_var, style="Subtitle.TLabel").pack(side="left")
-        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=130)
+        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=180)
         self.progress.pack(side="right", padx=(12, 0))
+        self.after_idle(lambda: body.sashpos(0, int(body.winfo_height() * 0.66)))
 
     def _stat_card(self, parent, title, value):
         card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 12))
@@ -772,6 +833,58 @@ class CraftUpdater(tk.Tk):
                     self.tree.reattach(item, "", "end")
             elif item in self.tree.get_children():
                 self.tree.detach(item)
+
+    def _tree_column_cursor(self, event):
+        if self.tree.identify_region(event.x, event.y) == "separator":
+            self.tree.configure(cursor="sb_h_double_arrow")
+        else:
+            self.tree.configure(cursor="")
+
+    def _tree_column_resize_start(self, event):
+        if self.tree.identify_region(event.x, event.y) != "separator":
+            return
+        column = self.tree.identify_column(event.x)
+        if not column:
+            return
+        self._tree_resize_column = column
+        self._tree_resize_x = event.x
+        self._tree_resize_width = self.tree.column(column, "width")
+        return "break"
+
+    def _tree_column_resize(self, event):
+        column = self._tree_resize_column
+        if column is None:
+            return
+        minimum = self.tree.column(column, "minwidth")
+        width = max(minimum, self._tree_resize_width + event.x - self._tree_resize_x)
+        self.tree.column(column, width=width)
+        return "break"
+
+    def _tree_column_resize_end(self, _event):
+        self._tree_resize_column = None
+
+    def _tree_double_click(self, event):
+        if self.tree.identify_region(event.x, event.y) == "separator":
+            column = self.tree.identify_column(event.x)
+            if column:
+                self._autosize_tree_column(column)
+            return "break"
+        self._show_build_details(event)
+
+    def _autosize_tree_column(self, column):
+        heading = self.tree.heading(column, "text")
+        heading_font_name = ttk.Style(self).lookup("Treeview.Heading", "font")
+        heading_font = tkfont.Font(root=self, font=heading_font_name) if heading_font_name else tkfont.nametofont("TkDefaultFont")
+        cell_font = tkfont.nametofont("TkDefaultFont")
+        widest = heading_font.measure(heading) + 24
+        if column == "#0":
+            values = (self.tree.item(item, "text") for item in self.tree.get_children(""))
+        else:
+            values = (self.tree.set(item, column) for item in self.tree.get_children(""))
+        for value in values:
+            widest = max(widest, cell_font.measure(value) + 24)
+        minimum = self.tree.column(column, "minwidth")
+        self.tree.column(column, width=max(minimum, widest))
 
     def _select_all(self):
         self.tree.selection_set(self.tree.get_children())
@@ -826,6 +939,13 @@ class CraftUpdater(tk.Tk):
             self.tree.set(item, "available", latest[:8] if latest else self._t("no_version"))
             delta = self.commit_deltas.get(package)
             self.tree.set(item, "commits", str(delta) if delta is not None else self._t("no_version"))
+            record = _read_build_record(package)
+            finished = record.get("finished_at", "")
+            try:
+                last_build = datetime.fromisoformat(finished).astimezone().strftime("%d.%m.%Y")
+            except (TypeError, ValueError):
+                last_build = self._t("no_version")
+            self.tree.set(item, "last_build", last_build)
             self.tree.item(item, tags=(tag,))
         self.installed_count.set(str(installed))
         self.source_count.set(str(sources))
@@ -839,6 +959,83 @@ class CraftUpdater(tk.Tk):
             return []
         return [self.items[item] for item in selected]
 
+    def _refresh_inventory(self):
+        _flatpak_app_ids.cache_clear()
+        _snap_app_names.cache_clear()
+        _known_portable_apps.cache_clear()
+        self._refresh_status()
+        for name, package in self.items.values():
+            installation = installed_app(package)
+            if installation:
+                kind = {"Benutzerinstallation": self._t("local"), "Programm": self._t("system")}.get(
+                    installation.kind, installation.kind
+                )
+                result = f"{kind} — {installation.location}"
+            else:
+                result = self._t("inventory_not_found")
+            self._append(self._t("inventory_checked").format(name, result))
+        self.status_var.set(self._t("inventory_refresh_done"))
+
+    def _remove_selected(self):
+        selected = self._selected()
+        if not selected:
+            return
+        if len(selected) != 1:
+            messagebox.showinfo(self._t("remove_title"), self._t("remove_unmanaged").format("Mehrere Apps"))
+            return
+        name, package = selected[0]
+        managed = BIN_DIR / package
+        if not managed.is_file():
+            messagebox.showinfo(self._t("remove_title"), self._t("remove_unmanaged").format(name))
+            return
+        if not messagebox.askyesno(self._t("remove_title"), self._t("remove_confirm").format(name)):
+            return
+        try:
+            managed.unlink()
+            applications_dir = DATA_DIR / "applications"
+            if applications_dir.is_dir():
+                for desktop in applications_dir.glob("*.desktop"):
+                    parser = configparser.ConfigParser(interpolation=None, strict=False)
+                    try:
+                        parser.read(desktop, encoding="utf-8")
+                        command = shlex.split(parser.get("Desktop Entry", "Exec", fallback=""))
+                    except (OSError, configparser.Error, ValueError):
+                        continue
+                    if command and Path(command[0]).expanduser() == managed:
+                        desktop.unlink(missing_ok=True)
+            shutil.rmtree(DATA_DIR / "icons" / "craft-updater" / package, ignore_errors=True)
+            mime_packages = DATA_DIR / "mime" / "packages"
+            if mime_packages.is_dir():
+                for path in mime_packages.glob(f"craft-updater-{package}-*"):
+                    path.unlink(missing_ok=True)
+            for suffix in (".commit", ".json"):
+                (BUILD_STATE_DIR / f"{package}{suffix}").unlink(missing_ok=True)
+            _flatpak_app_ids.cache_clear()
+            _snap_app_names.cache_clear()
+            _known_portable_apps.cache_clear()
+            self._refresh_status()
+            messagebox.showinfo(self._t("remove_title"), self._t("remove_done").format(name))
+        except OSError as exc:
+            messagebox.showerror(self._t("remove_title"), str(exc))
+
+    def _show_build_details(self, _event=None):
+        item = self.tree.focus()
+        if item not in self.items:
+            return
+        name, package = self.items[item]
+        record = _read_build_record(package)
+        try:
+            commit = (BUILD_STATE_DIR / f"{package}.commit").read_text(encoding="utf-8").strip()
+        except OSError:
+            commit = self._t("unknown_version")
+        finished = record.get("finished_at", self._t("no_version"))
+        result = record.get("result", self._t("unknown_version"))
+        error = record.get("error", "")
+        details = f"{name}\n\nCommit: {commit}\nLetzter Lauf: {finished}\nErgebnis: {result}"
+        if error:
+            details += f"\n\n{error}"
+        messagebox.showinfo(name, details)
+
     def _start(self, title, operation, *, cancellable=True):
         if self.busy:
             return
@@ -846,6 +1043,8 @@ class CraftUpdater(tk.Tk):
         self.cancel_event = threading.Event()
         self.operation_cancellable = cancellable
         self.check_btn.configure(state="disabled")
+        self.refresh_btn.configure(state="disabled")
+        self.remove_btn.configure(state="disabled")
         self.self_update_btn.configure(state="disabled")
         self.update_btn.configure(state="disabled")
         self.language_combo.configure(state="disabled")
@@ -920,13 +1119,29 @@ class CraftUpdater(tk.Tk):
         force = self.force_var.get()
         translate = lambda key: TEXTS[self.language][key]
         def operation():
-            for name, package in selected:
+            results = []
+            total = len(selected)
+            for index, (name, package) in enumerate(selected, start=1):
+                self.events.put(("app_progress", (index, total, name)))
                 self.events.put(("log", "\n" + self._t("already_starts").format(name)))
-                _check_cancel(self.cancel_event)
-                update_app(name, package, force, lambda line: self.events.put(("log", line)), translate, self.cancel_event)
-                self.events.put(("log", self._t("app_completed").format(name)))
+                try:
+                    _check_cancel(self.cancel_event)
+                    update_app(name, package, force, lambda line: self.events.put(("log", line)), translate, self.cancel_event)
+                    results.append((name, True, ""))
+                    self.events.put(("app_finished", index))
+                    self.events.put(("log", self._t("app_completed").format(name)))
+                except OperationCancelled:
+                    results.append((name, False, self._t("result_cancelled")))
+                    self.events.put(("update_results", results))
+                    raise
+                except Exception as exc:
+                    previous = _read_build_record(package)
+                    _write_build_record(package, previous.get("commit", ""), "failed", str(exc))
+                    results.append((name, False, str(exc)))
+                    self.events.put(("app_finished", index))
+                    self.events.put(("log", self._t("error_prefix") + " " + name + ": " + str(exc)))
             self.events.put(("refresh", None))
-            self.events.put(("update_complete", ", ".join(name for name, _package in selected)))
+            self.events.put(("update_results", results))
         self._start(self._t("update_run"), operation)
 
     def _check_self_update(self):
@@ -1017,6 +1232,13 @@ class CraftUpdater(tk.Tk):
             while True:
                 kind, value = self.events.get_nowait()
                 if kind == "log": self._append(value)
+                elif kind == "app_progress":
+                    index, total, name = value
+                    self.progress.stop()
+                    self.progress.configure(mode="determinate", maximum=total, value=index - 1)
+                    self.status_var.set(self._t("progress_apps").format(index, total, name))
+                elif kind == "app_finished":
+                    self.progress.configure(value=value)
                 elif kind == "status": self.tree.set(*value)
                 elif kind == "refresh": self._refresh_status()
                 elif kind == "version":
@@ -1031,6 +1253,13 @@ class CraftUpdater(tk.Tk):
                         self._t("update_complete_title"),
                         self._t("update_complete_message").format(value),
                     )
+                elif kind == "update_results":
+                    succeeded = [(name, error) for name, ok, error in value if ok]
+                    failed = [(name, error) for name, ok, error in value if not ok]
+                    lines = [self._t("results_summary").format(len(succeeded), len(failed)), ""]
+                    lines.extend(f"✓ {name}" for name, _ in succeeded)
+                    lines.extend(f"✗ {name}: {error}" for name, error in failed)
+                    messagebox.showinfo(self._t("results_title"), "\n".join(lines))
                 elif kind == "self_update_source":
                     self.self_update_btn.configure(state="normal")
                     self._finish_operation(self._t("ready"))
@@ -1079,12 +1308,15 @@ class CraftUpdater(tk.Tk):
         self.cancel_event = None
         self.operation_cancellable = True
         self.check_btn.configure(state="normal")
+        self.refresh_btn.configure(state="normal")
+        self.remove_btn.configure(state="normal")
         self.self_update_btn.configure(state="normal")
         self.update_btn.configure(state="normal")
         self.language_combo.configure(state="readonly")
         self.cancel_btn.configure(state="disabled")
         self.close_btn.configure(state="normal")
         self.progress.stop()
+        self.progress.configure(mode="indeterminate", value=0)
         self.status_var.set(status)
 
     def _show_self_update_dialog(self, release):
