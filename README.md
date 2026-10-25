@@ -43,9 +43,11 @@ PdfCraft, WordCraft, GridCraft, DeckCraft, PhotoCraft, LightCraft, VectorCraft, 
 ## Requirements
 
 - Linux, Python 3, and Tkinter
-- Git, Rust, Cargo, `pkg-config`, and `nice`
+- Git, Rust/Cargo new enough for the selected app, `pkg-config`, and `nice`
 - The development libraries required by the selected ArtCraft project
 - An internet connection and sufficient free disk space
+
+Some upstream app revisions require a newer Rust compiler than the one shipped by a Linux distribution. For example, the current PhotoCraft and PdfCraft sources require Rust 1.95 or newer; Debian 13's Rust 1.85.1 is too old. The official [Rust installation guide](https://rust-lang.org/tools/install/) recommends `rustup`, which can keep the stable toolchain up to date.
 
 On Debian or Ubuntu, install the common prerequisites with:
 
@@ -97,7 +99,7 @@ CraftUpdater clones each selected project from `github.com/storytold/<App>` and 
 
 Before a build, CraftUpdater checks for the required build tools and selected system libraries, then checks available disk space. You can cancel Git and build operations. A new executable is copied to a temporary file and replaces the managed executable only after the build succeeds.
 
-Builds set Rust's minimum thread stack to 16 MiB to avoid compiler crashes reported by LLVM during release builds on some systems. If a build still fails, check the activity log or `~/.local/state/craft-updater-gui/last-run.log` for the compiler output; the installed executable is left untouched when the build fails.
+Builds set Rust's minimum thread stack to 16 MiB to avoid compiler crashes reported by LLVM during release builds on some systems. Cargo exit code `101` only means that Cargo could not complete the build. Check the activity log or `~/.local/state/craft-updater-gui/last-run.log` and look for the first specific error above the final `Befehl fehlgeschlagen` line. If it says that `rustc` is too old, update Rust with `rustup update stable`, then check `rustc --version` and `command -v rustc`. Make sure `~/.cargo/bin` comes before `/usr/bin` in `PATH`, then restart the terminal and CraftUpdater. The installed executable is left untouched when a build fails.
 
 Installed commit versions are available for apps previously built by CraftUpdater. For installations made by other tools, the installed commit is shown as unknown. If an app's source repository has not been cloned yet, the latest GitHub commit is shown, while the commit count is unknown until the repository is available locally.
 
