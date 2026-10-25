@@ -34,7 +34,7 @@ APPS = [
     ("FilmCraft", "filmcraft"), ("EffectCraft", "effectcraft"),
 ]
 HOME = Path.home()
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.2.2"
 GITHUB_REPO = "wildcardcharacter/CraftUpdater-ArtCraft-App-Updater-for-Linux"
 REPOS = HOME / "git"
 BIN_DIR = HOME / ".local" / "bin"

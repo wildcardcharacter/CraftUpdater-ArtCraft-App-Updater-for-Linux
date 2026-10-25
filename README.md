@@ -77,10 +77,10 @@ Build a Debian package with the application menu entry and scalable icon:
 ./build-deb.sh
 ```
 
-The package is created at `dist/craft-updater_0.2.1_all.deb`. Install it with:
+The package is created at `dist/craft-updater_0.2.2_all.deb`. Install it with:
 
 ```sh
-sudo apt install ./dist/craft-updater_0.2.1_all.deb
+sudo apt install ./dist/craft-updater_0.2.2_all.deb
 ```
 
 You can pass a package version to the build script, for example `./build-deb.sh 0.3.0`.
