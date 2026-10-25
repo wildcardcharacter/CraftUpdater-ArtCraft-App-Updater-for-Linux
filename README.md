@@ -99,7 +99,16 @@ CraftUpdater clones each selected project from `github.com/storytold/<App>` and 
 
 Before a build, CraftUpdater checks for the required build tools and selected system libraries, then checks available disk space. You can cancel Git and build operations. A new executable is copied to a temporary file and replaces the managed executable only after the build succeeds.
 
-Builds set Rust's minimum thread stack to 16 MiB to avoid compiler crashes reported by LLVM during release builds on some systems. Cargo exit code `101` only means that Cargo could not complete the build. Check the activity log or `~/.local/state/craft-updater-gui/last-run.log` and look for the first specific error above the final `Befehl fehlgeschlagen` line. If it says that `rustc` is too old, update Rust with `rustup update stable`, then check `rustc --version` and `command -v rustc`. Make sure `~/.cargo/bin` comes before `/usr/bin` in `PATH`, then restart the terminal and CraftUpdater. The installed executable is left untouched when a build fails.
+Builds set Rust's minimum thread stack to 16 MiB by default. Cargo exit code `101` only means that Cargo could not complete the build. Check the activity log or `~/.local/state/craft-updater-gui/last-run.log` and look for the first specific error above the final `Befehl fehlgeschlagen` line. If it says that `rustc` is too old, install or update Rust with `rustup`, then check `rustc --version` and `command -v rustc`. Make sure `~/.cargo/bin` comes before `/usr/bin` in `PATH`, then restart the terminal and CraftUpdater.
+
+On Debian 13, a PhotoCraft release build was observed to crash inside LLVM with `SIGSEGV` when using Rust 1.99.1, even after increasing `RUST_MIN_STACK` to 128 MiB. The same PhotoCraft build completed successfully with Rust 1.95.0. If you encounter this specific compiler crash, install that toolchain and launch CraftUpdater from a terminal with it selected:
+
+```bash
+rustup toolchain install 1.95.0
+RUSTUP_TOOLCHAIN=1.95.0 CARGO_BUILD_JOBS=1 python3 '/path/to/craft_updater.py'
+```
+
+Replace `/path/to/craft_updater.py` with the actual script path. `RUSTUP_TOOLCHAIN` applies to Cargo started by CraftUpdater as well. The installed executable is left untouched when a build fails.
 
 Installed commit versions are available for apps previously built by CraftUpdater. For installations made by other tools, the installed commit is shown as unknown. If an app's source repository has not been cloned yet, the latest GitHub commit is shown, while the commit count is unknown until the repository is available locally.
 
