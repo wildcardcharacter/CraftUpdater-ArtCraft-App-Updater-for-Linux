@@ -4,21 +4,13 @@ A lightweight Linux desktop app for checking and updating the open source ArtCra
 
 ## Screenshots
 
-**Application list, installation status, and activity log**
+**Deutsche Oberfläche**
 
-![CraftUpdater main window](assets/img/main-window.png)
+![CraftUpdater 0.3.0 mit Updateprüfung und verfügbaren Paketversionen auf Deutsch](assets/img/deu_main-window.png)
 
-**Installing a CraftUpdater update**
+**English interface**
 
-![CraftUpdater update dialog with release notes](assets/img/updater_CraftUpdater.png)
-
-**Checking for updates and viewing activity**
-
-![CraftUpdater building an update](assets/img/main-window-2.png)
-
-**Completion message**
-
-![CraftUpdater update complete message](assets/img/update_finished.png)
+![CraftUpdater 0.3.0 showing release versions and update status in English](assets/img/eng_main-window.png)
 
 ## Features
 
