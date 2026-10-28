@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-VERSION=${1:-0.2.2}
+VERSION=${1:-0.3.0}
 
 case "$VERSION" in
   ""|*[!A-Za-z0-9.+~:-]*)

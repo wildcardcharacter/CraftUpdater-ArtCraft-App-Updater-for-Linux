@@ -1,6 +1,6 @@
 # CraftUpdater
 
-A lightweight Linux desktop app for checking, building, and updating the open source ArtCraft applications from GitHub.
+A lightweight Linux desktop app for checking and updating the open source ArtCraft applications from GitHub releases.
 
 ## Screenshots
 
@@ -22,17 +22,17 @@ A lightweight Linux desktop app for checking, building, and updating the open so
 
 ## Features
 
-- Check GitHub for the latest commit of each supported app.
-- See installed and available commit versions, plus the number of new commits when the local source repository is available.
+- Check GitHub Releases for the latest version of each supported app.
+- See installed and available release versions and whether an update is available.
 - Detect common existing installations, including native programs, Flatpak, Snap, and AppImages.
 - Rescan every supported app and show the detected installation type and path in the activity log. Apps without a detected installation are reported as not installed.
-- Build selected apps from source and install them into `~/.local/bin`.
-- Check build tools, required development libraries, and free disk space before starting a build.
-- Cancel a running operation. The existing managed executable is kept until the replacement has built successfully.
+- Download the matching Linux `.deb` package for the system architecture and install it through the system package manager.
+- Verify the package checksum and identity before installation.
+- Cancel a running download or installation. Package installation uses the system authentication prompt.
 - Get a completion dialog listing the apps processed after a successful update operation.
 - Switch the interface between German and English.
 - Check GitHub Releases for CraftUpdater updates, review release notes, and install the new Debian package from the GUI with an administrator authentication prompt.
-- View build output in the app and in a persistent log file.
+- View download and installation output in the app and in a persistent log file.
 - Resize table columns by dragging their dividers, or double-click a divider to fit the column to its heading and visible values. Resize the table and activity log areas by dragging their divider.
 - Open PDFs with PdfCraft from the file manager using **Open With**. The installed desktop entry passes selected PDF paths correctly; CraftUpdater keeps the `%U` file argument unquoted so the desktop environment can expand it.
 
@@ -43,16 +43,13 @@ PdfCraft, WordCraft, GridCraft, DeckCraft, PhotoCraft, LightCraft, VectorCraft, 
 ## Requirements
 
 - Linux, Python 3, and Tkinter
-- Git, Rust/Cargo new enough for the selected app, `pkg-config`, and `nice`
-- The development libraries required by the selected ArtCraft project
-- An internet connection and sufficient free disk space
-
-Some upstream app revisions require a newer Rust compiler than the one shipped by a Linux distribution. For example, the current PhotoCraft and PdfCraft sources require Rust 1.95 or newer; Debian 13's Rust 1.85.1 is too old. The official [Rust installation guide](https://rust-lang.org/tools/install/) recommends `rustup`, which can keep the stable toolchain up to date.
+- `dpkg`, `apt-get`, and `pkexec` (normally available on Debian and Ubuntu)
+- An internet connection
 
 On Debian or Ubuntu, install the common prerequisites with:
 
 ```sh
-sudo apt install python3 python3-tk git cargo build-essential pkg-config libgtk-3-dev libasound2-dev pkexec
+sudo apt install python3 python3-tk pkexec
 ```
 
 ## Run
@@ -79,10 +76,10 @@ Build a Debian package with the application menu entry and scalable icon:
 ./build-deb.sh
 ```
 
-The package is created at `dist/craft-updater_0.2.2_all.deb`. Install it with:
+The package is created at `dist/craft-updater_0.3.0_all.deb`. Install it with:
 
 ```sh
-sudo apt install ./dist/craft-updater_0.2.2_all.deb
+sudo apt install ./dist/craft-updater_0.3.0_all.deb
 ```
 
 You can pass a package version to the build script, for example `./build-deb.sh 0.3.0`.
@@ -91,26 +88,11 @@ You can pass a package version to the build script, for example `./build-deb.sh 
 
 Use **Update CraftUpdater** in the window header to check the latest GitHub release. When a newer version is available, CraftUpdater displays its release notes. Choosing **Install update** downloads the matching `.deb` asset and opens the system authentication prompt to install it. The installer closes after installation and offers to start the updated version. This self-update is available when CraftUpdater was installed from a Debian package; source installations should be updated by downloading or building the newer package manually.
 
-Click **Check app updates** to query GitHub, select apps in the table, then click **Update selected apps**. Use **Rescan installations** to update the detected installation statuses and write the detected type and path for each app to the activity log. The status **Source available** means the app's source repository exists locally; it does not mean the app is installed.
+Click **Check app updates** to query each app's latest GitHub Release. Select apps in the table, then click **Update selected apps**. The latest `.deb` for the computer's x86_64 or ARM64 architecture is downloaded, checked against the release SHA-256, and installed with `apt-get` after administrator authentication. If a matching package or checksum is unavailable, that app's update is stopped with an error. A prior CraftUpdater-managed binary in `~/.local/bin` is removed after the package installs successfully so it cannot shadow the system package.
 
 ## How updates work
 
-CraftUpdater clones each selected project from `github.com/storytold/<App>` and builds it with Cargo. The resulting executable is installed under `~/.local/bin`; system managed files are left untouched. The first build can take several minutes and use multiple gigabytes of disk space.
-
-Before a build, CraftUpdater checks for the required build tools and selected system libraries, then checks available disk space. You can cancel Git and build operations. A new executable is copied to a temporary file and replaces the managed executable only after the build succeeds.
-
-Builds set Rust's minimum thread stack to 16 MiB by default. Cargo exit code `101` only means that Cargo could not complete the build. Check the activity log or `~/.local/state/craft-updater-gui/last-run.log` and look for the first specific error above the final `Befehl fehlgeschlagen` line. If it says that `rustc` is too old, install or update Rust with `rustup`, then check `rustc --version` and `command -v rustc`. Make sure `~/.cargo/bin` comes before `/usr/bin` in `PATH`, then restart the terminal and CraftUpdater.
-
-On Debian 13, a PhotoCraft release build was observed to crash inside LLVM with `SIGSEGV` when using Rust 1.99.1, even after increasing `RUST_MIN_STACK` to 128 MiB. The same PhotoCraft build completed successfully with Rust 1.95.0. If you encounter this specific compiler crash, install that toolchain and launch CraftUpdater from a terminal with it selected:
-
-```bash
-rustup toolchain install 1.95.0
-RUSTUP_TOOLCHAIN=1.95.0 CARGO_BUILD_JOBS=1 python3 '/path/to/craft_updater.py'
-```
-
-Replace `/path/to/craft_updater.py` with the actual script path. `RUSTUP_TOOLCHAIN` applies to Cargo started by CraftUpdater as well. The installed executable is left untouched when a build fails.
-
-Installed commit versions are available for apps previously built by CraftUpdater. For installations made by other tools, the installed commit is shown as unknown. If an app's source repository has not been cloned yet, the latest GitHub commit is shown, while the commit count is unknown until the repository is available locally.
+The `.deb` packages are installed system-wide by `apt-get`; dependencies declared by the upstream package are handled by the package manager. Existing user settings and documents are not changed. Apps that were previously installed by CraftUpdater from source are migrated when their package is installed: the old user-local executable and its generated launcher override are removed after a successful installation.
 
 The language preference is saved in `~/.config/craft-updater-gui/settings.json`. The activity log is saved in `~/.local/state/craft-updater-gui/last-run.log`.
 

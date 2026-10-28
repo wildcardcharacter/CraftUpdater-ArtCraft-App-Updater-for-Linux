@@ -16,6 +16,8 @@ import re
 from datetime import datetime, timezone
 import urllib.error
 import urllib.request
+import platform
+import hashlib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from functools import lru_cache
@@ -34,7 +36,7 @@ APPS = [
     ("FilmCraft", "filmcraft"), ("EffectCraft", "effectcraft"),
 ]
 HOME = Path.home()
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.3.0"
 GITHUB_REPO = "wildcardcharacter/CraftUpdater-ArtCraft-App-Updater-for-Linux"
 REPOS = HOME / "git"
 BIN_DIR = HOME / ".local" / "bin"
@@ -57,16 +59,16 @@ TEXTS = {
         "check": "App-Updates prüfen", "installed": "Installiert", "selected": "Ausgewählt",
         "sources": "Quellcode vorhanden", "apps": "Deine Apps", "search": "Suchen",
         "updates": "Updates offen", "app": "Anwendung", "status": "Installationsstatus",
-        "installed_version": "Installierte Version", "available_version": "Neueste Version", "commits": "Neue Commits",
+        "installed_version": "Installierte Version", "available_version": "Neueste Version", "commits": "Update",
         "select_installed": "Installierte markieren",
         "select_all": "Alle markieren", "activity": "Aktivitätsprotokoll", "clear": "Protokoll leeren",
-        "ready": "Bereit", "force": "Neuaufbau erzwingen", "update_selected": "Markierte Apps aktualisieren",
+        "ready": "Bereit", "force": "Neueste Version erneut installieren", "update_selected": "Markierte Apps aktualisieren",
         "none_title": "Keine Auswahl", "none_selected": "Bitte wähle mindestens eine App aus.",
         "check_run": "Updateprüfung", "update_run": "App-Update", "running": "{} läuft …",
         "command_failed": "Befehl fehlgeschlagen", "fetch": "Änderungen abrufen …",
-        "clone": "Klonen: {}", "building": "{} wird gebaut (das kann einige Minuten dauern) …",
+        "clone": "Klonen: {}", "building": "{}-Paket wird vorbereitet …",
         "binary_missing": "Gebautes Programm nicht gefunden: {}",
-        "already_current": "Bereits aktuell; kein Neuaufbau nötig.",
+        "already_current": "Bereits aktuell; kein Update nötig.",
         "menu_installed": "Anwendungsmenü-Eintrag installiert: {}",
         "mime_installed": "Dateityp-Informationen installiert ({} XML-Datei(en)).",
         "no_desktop": "Kein passender Menüeintrag im Quellcode gefunden; installiert wurde nur das Programm.",
@@ -74,21 +76,23 @@ TEXTS = {
         "app_completed": "{}: abgeschlossen", "checking_app": "{}: prüfe GitHub …",
         "progress_apps": "App {} von {}: {}", "result_success": "Erfolgreich", "result_failed": "Fehlgeschlagen",
         "result_cancelled": "Abgebrochen", "results_title": "Update-Ergebnisse", "results_summary": "Erfolgreich: {} · Fehlgeschlagen: {}",
-        "last_build": "Letzter Build",
+        "last_build": "Letztes Update",
         "refresh_view": "Installationen neu suchen", "remove_app": "Markierte App entfernen", "remove_title": "App löschen",
         "inventory_checked": "Installationssuche für {}: {}",
         "inventory_not_found": "nicht installiert (in den geprüften Installationsorten nicht gefunden)",
         "inventory_refresh_done": "Installationsstatus aktualisiert.",
         "remove_confirm": "Die von CraftUpdater verwaltete Installation von {} einschließlich Menüeinträgen und Build-Informationen löschen?",
         "remove_done": "Die verwaltete Installation von {} wurde gelöscht.", "remove_unmanaged": "{} wird nicht von CraftUpdater verwaltet und kann hier nicht gelöscht werden.",
-        "waiting_clone": "Noch nicht geklont", "commits_waiting": "{} neue Commits", "up_to_date": "Aktuell",
+        "waiting_clone": "Noch nicht geklont", "commits_waiting": "Update verfügbar", "up_to_date": "Aktuell",
+        "not_installed": "Nicht installiert",
         "installed_status": "Installiert · {}", "local": "Lokal", "system": "System",
         "source_status": "Quellcode vorhanden", "missing_status": "Nicht installiert",
         "failed": "Vorgang fehlgeschlagen", "error_title": "Vorgang fehlgeschlagen", "error_prefix": "FEHLER:",
         "unknown_version": "Unbekannt", "no_version": "—", "cancel": "Vorgang abbrechen",
         "cancelling": "Abbruch läuft …", "cancelled": "Abgebrochen", "close": "Fenster schließen", "preflight": "Systemprüfung",
         "preflight_ok": "Voraussetzungen erfüllt; {} GB frei.",
-        "missing_tools": "Benötigte Programme fehlen: {}. Installiere Git, Rust/Cargo, pkg-config und nice.",
+        "installing_system_package": "Systempaket wird installiert …",
+        "missing_tools": "Benötigte Programme fehlen: {}. Installiere dpkg-deb und apt-get.",
         "missing_package": "Systembibliothek {} fehlt. Installiere das passende Entwicklungspaket.",
         "low_space": "Zu wenig freier Speicher: {} GB verfügbar, mindestens {} GB erforderlich.",
         "new_commits": "{} neue Commits", "version_check_failed": "Versionsprüfung fehlgeschlagen",
@@ -111,16 +115,16 @@ TEXTS = {
         "check": "Check app updates", "installed": "Installed", "selected": "Selected",
         "sources": "Source available", "apps": "Your apps", "search": "Search",
         "updates": "Updates available", "app": "Application", "status": "Installation status",
-        "installed_version": "Installed version", "available_version": "Latest version", "commits": "New commits",
+        "installed_version": "Installed version", "available_version": "Latest version", "commits": "Update",
         "select_installed": "Select installed apps",
         "select_all": "Select all apps", "activity": "Activity log", "clear": "Clear log",
-        "ready": "Ready", "force": "Force rebuild", "update_selected": "Update selected apps",
+        "ready": "Ready", "force": "Reinstall latest release", "update_selected": "Update selected apps",
         "none_title": "Nothing selected", "none_selected": "Select at least one app.",
         "check_run": "Checking for updates", "update_run": "App update", "running": "{} in progress …",
         "command_failed": "Command failed", "fetch": "Fetching changes …",
-        "clone": "Cloning: {}", "building": "Building {} (this may take a few minutes) …",
+        "clone": "Cloning: {}", "building": "Preparing the {} package …",
         "binary_missing": "Built executable not found: {}",
-        "already_current": "Already up to date; no rebuild needed.",
+        "already_current": "Already up to date; no update needed.",
         "menu_installed": "Installed application menu entry: {}",
         "mime_installed": "Installed file type information ({} XML file(s)).",
         "no_desktop": "No matching menu entry found in the source; only the program was installed.",
@@ -128,21 +132,23 @@ TEXTS = {
         "app_completed": "{}: complete", "checking_app": "{}: checking GitHub …",
         "progress_apps": "App {} of {}: {}", "result_success": "Succeeded", "result_failed": "Failed", "result_cancelled": "Cancelled",
         "results_title": "Update results", "results_summary": "Succeeded: {} · Failed: {}",
-        "last_build": "Last build",
+        "last_build": "Last update",
         "refresh_view": "Rescan installations", "remove_app": "Remove selected app", "remove_title": "Remove app",
         "inventory_checked": "Installation search for {}: {}",
         "inventory_not_found": "not installed (not found in the locations checked)",
         "inventory_refresh_done": "Installation status refreshed.",
         "remove_confirm": "Delete CraftUpdater's managed installation of {}, including menu entries and build records?",
         "remove_done": "The managed installation of {} was removed.", "remove_unmanaged": "{} is not managed by CraftUpdater and cannot be removed here.",
-        "waiting_clone": "Not cloned yet", "commits_waiting": "{} new commits", "up_to_date": "Up to date",
+        "waiting_clone": "Not cloned yet", "commits_waiting": "Update available", "up_to_date": "Up to date",
+        "not_installed": "Not installed",
         "installed_status": "Installed · {}", "local": "Local", "system": "System",
         "source_status": "Source available", "missing_status": "Not installed",
         "failed": "Operation failed", "error_title": "Operation failed", "error_prefix": "ERROR:",
         "unknown_version": "Unknown", "no_version": "—", "cancel": "Cancel operation",
         "cancelling": "Cancelling …", "cancelled": "Cancelled", "close": "Close window", "preflight": "Preflight checks",
         "preflight_ok": "Requirements met; {} GB free.",
-        "missing_tools": "Required tools are missing: {}. Install Git, Rust/Cargo, pkg-config and nice.",
+        "installing_system_package": "Installing system package …",
+        "missing_tools": "Required tools are missing: {}. Install dpkg-deb and apt-get.",
         "missing_package": "System library {} is missing. Install its development package.",
         "low_space": "Not enough free space: {} GB available, at least {} GB required.",
         "new_commits": "{} new commits", "version_check_failed": "Version check failed",
@@ -179,6 +185,12 @@ def _version_key(version: str) -> tuple[int, ...]:
     return tuple(int(number) for number in numbers) or (0,)
 
 
+def _app_version_key(version: str) -> tuple[int, ...]:
+    # Ignore Debian's packaging revision (for example 0.14.0-1).
+    upstream = version.split(":")[-1]
+    return _version_key(re.sub(r"-[0-9]+$", "", upstream))
+
+
 def _installed_deb_version() -> str | None:
     try:
         result = subprocess.run(
@@ -191,6 +203,58 @@ def _installed_deb_version() -> str | None:
     if result.returncode or len(lines) < 2 or lines[0] != "install ok installed":
         return None
     return lines[1].split(":")[-1]
+
+
+def _installed_app_version(package: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Status}\n${Version}", package],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    lines = result.stdout.splitlines()
+    if result.returncode or len(lines) < 2 or lines[0] != "install ok installed":
+        return None
+    return lines[1].split(":")[-1]
+
+
+def _release_api_url(repo_name: str) -> str:
+    return f"https://api.github.com/repos/storytold/{repo_name.lower()}/releases/latest"
+
+
+def _linux_deb_arch() -> str:
+    machine = platform.machine().lower()
+    mapping = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}
+    if machine not in mapping:
+        raise RuntimeError(f"Unsupported Linux architecture: {machine}")
+    return mapping[machine]
+
+
+def _latest_app_release(repo_name: str, package: str) -> dict:
+    request = urllib.request.Request(
+        _release_api_url(repo_name),
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "CraftUpdater"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        release = json.loads(response.read(5_000_000).decode("utf-8"))
+    tag = str(release.get("tag_name", "")).strip()
+    version = tag.removeprefix("v").removeprefix("V")
+    if not version:
+        raise RuntimeError("GitHub release has no version tag")
+    filename = f"{package}-{version}-linux-{_linux_deb_arch()}.deb"
+    assets = release.get("assets", [])
+    asset = next((item for item in assets if item.get("name") == filename), None)
+    if not asset or not str(asset.get("browser_download_url", "")).startswith("https://"):
+        raise RuntimeError(f"Release asset {filename} is missing")
+    sums = next((item for item in assets if item.get("name") == "SHA256SUMS.txt"), None)
+    return {
+        "tag": tag, "version": version, "name": filename,
+        "url": asset["browser_download_url"],
+        "digest": str(asset.get("digest", "")),
+        "sums_url": sums.get("browser_download_url") if sums else None,
+        "notes": str(release.get("body", "")).strip(),
+    }
 
 
 class OperationCancelled(Exception):
@@ -497,80 +561,105 @@ def install_desktop_integration(repo: Path, package: str, installed: Path, log, 
 
 def _preflight(repo: Path, package: str, log, translate, cancel_event):
     _check_cancel(cancel_event)
-    required = ["git", "cargo", "rustc", "pkg-config", "nice"]
+    required = ["dpkg-deb", "apt-get", "pkexec"]
     missing = [name for name in required if not shutil.which(name)]
     if missing:
         raise RuntimeError(_message(translate, "missing_tools", ", ".join(missing)))
-    libraries = ["gtk+-3.0"]
-    if package in {"soundcraft", "filmcraft"}:
-        libraries.append("alsa")
-    for library in libraries:
-        result = subprocess.run(["pkg-config", "--exists", library], check=False)
-        if result.returncode:
-            raise RuntimeError(_message(translate, "missing_package", library))
-    disk = shutil.disk_usage(repo.parent if repo.parent.exists() else HOME)
-    required_bytes = 3 * 1024**3 if repo.exists() else 5 * 1024**3
-    if disk.free < required_bytes:
-        raise RuntimeError(_message(translate, "low_space", round(disk.free / 1024**3, 1), round(required_bytes / 1024**3)))
+    _linux_deb_arch()
+    disk = shutil.disk_usage(Path.home())
     log(_message(translate, "preflight_ok", round(disk.free / 1024**3, 1)))
 
 
-def update_app(repo_name: str, package: str, force: bool, log, translate=None, cancel_event=None) -> None:
-    repo = REPOS / repo_name
-    _preflight(repo, package, log, translate, cancel_event)
-    REPOS.mkdir(parents=True, exist_ok=True)
-    created_repo = not repo.exists()
+def update_app(repo_name: str, package: str, force: bool, log, translate=None, cancel_event=None,
+               release=None, on_installing=None) -> None:
+    _preflight(REPOS / repo_name, package, log, translate, cancel_event)
+    cached = (BUILD_STATE_DIR / f"{package}.release.json")
+    if not release:
+        release = _latest_app_release(repo_name, package)
+    installed_version = _installed_app_version(package)
+    if not force and installed_version and _app_version_key(release["version"]) <= _app_version_key(installed_version):
+        log(_message(translate, "already_current"))
+        _write_build_record(package, release["tag"], "current")
+        return
+
+    cache_dir = Path.home() / ".cache" / "craft-updater" / "apps"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    deb = cache_dir / release["name"]
+    log(_message(translate, "building", package))
+    request = urllib.request.Request(release["url"], headers={"User-Agent": "CraftUpdater"})
+    partial = deb.with_suffix(deb.suffix + ".part")
+    digest = hashlib.sha256()
     try:
-        _check_cancel(cancel_event)
-        if created_repo:
-            log(_message(translate, "clone", f"https://github.com/storytold/{repo_name}.git"))
-            run(["git", "clone", "https://github.com/storytold/" + repo_name + ".git", str(repo)], on_line=log, translate=translate, cancel_event=cancel_event)
-        else:
-            log(_message(translate, "fetch"))
-            run(["git", "fetch", "origin"], cwd=repo, on_line=log, translate=translate, cancel_event=cancel_event)
-            run(["git", "pull", "--ff-only"], cwd=repo, on_line=log, translate=translate, cancel_event=cancel_event)
+        with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as target:
+            while True:
+                _check_cancel(cancel_event)
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                target.write(chunk)
+                digest.update(chunk)
+        if partial.stat().st_size < 1024:
+            raise RuntimeError("Downloaded Debian package is unexpectedly small")
+        expected = release.get("digest", "")
+        if expected.startswith("sha256:"):
+            expected = expected.split(":", 1)[1]
+        elif release.get("sums_url"):
+            sums_request = urllib.request.Request(release["sums_url"], headers={"User-Agent": "CraftUpdater"})
+            with urllib.request.urlopen(sums_request, timeout=30) as response:
+                sums_text = response.read(1_000_000).decode("utf-8", errors="replace")
+            expected = next((line.split()[0] for line in sums_text.splitlines()
+                             if len(line.split()) >= 2 and line.split()[-1].lstrip("*") == release["name"]), "")
+        if not expected:
+            raise RuntimeError("Release does not provide a SHA-256 checksum for this package")
+        if digest.hexdigest().lower() != expected.lower():
+            raise RuntimeError("SHA-256 checksum mismatch for downloaded package")
+        os.replace(partial, deb)
+    finally:
+        partial.unlink(missing_ok=True)
 
-        head = run(["git", "rev-parse", "HEAD"], cwd=repo, translate=translate, cancel_event=cancel_event).strip()
-        if not force:
+    actual_package = subprocess.run(["dpkg-deb", "-f", str(deb), "Package"], capture_output=True, text=True, check=False)
+    actual_version = subprocess.run(["dpkg-deb", "-f", str(deb), "Version"], capture_output=True, text=True, check=False)
+    package_version = actual_version.stdout.strip().split(":")[-1]
+    upstream_version = package_version.split("-", 1)[0]
+    if actual_package.returncode or actual_package.stdout.strip() != package or upstream_version != release["version"]:
+        raise RuntimeError("Downloaded package identity does not match the selected release")
+
+    log(_message(translate, "self_installing"))
+    install_args = ["pkexec", "apt-get", "install", "-y"]
+    if force:
+        install_args.append("--reinstall")
+    install_args.append(str(deb))
+    _check_cancel(cancel_event)
+    if on_installing:
+        on_installing(True)
+    try:
+        run(install_args, on_line=log, translate=translate, cancel_event=None)
+    finally:
+        if on_installing:
+            on_installing(False)
+    _remove_managed_user_copy(package)
+    BUILD_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    (BUILD_STATE_DIR / f"{package}.version").write_text(release["version"] + "\n", encoding="utf-8")
+    cached.write_text(json.dumps(release, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_build_record(package, release["tag"], "success")
+    log(_message(translate, "install_path", f"{package} {release['version']} (Debian-Paket)"))
+
+
+def _remove_managed_user_copy(package: str) -> None:
+    managed = BIN_DIR / package
+    managed.unlink(missing_ok=True)
+    applications_dir = DATA_DIR / "applications"
+    if applications_dir.is_dir():
+        for desktop in applications_dir.glob("*.desktop"):
+            parser = configparser.ConfigParser(interpolation=None, strict=False)
             try:
-                old = (BUILD_STATE_DIR / f"{package}.commit").read_text().strip()
-            except OSError:
-                old = ""
-            if old == head and (BIN_DIR / package).exists():
-                install_desktop_integration(repo, package, BIN_DIR / package, log, translate, cancel_event)
-                log(_message(translate, "already_current"))
-                _write_build_record(package, head, "current")
-                return
-
-        _check_cancel(cancel_event)
-        log(_message(translate, "building", package))
-        build_env = os.environ.copy()
-        build_env.setdefault("RUST_MIN_STACK", "16777216")
-        run(["nice", "-n", "10", "cargo", "build", "--release", "--locked", "-p", package], cwd=repo, on_line=log, translate=translate, cancel_event=cancel_event, env=build_env)
-        binary = repo / "target" / "release" / package
-        if not binary.is_file():
-            raise RuntimeError(_message(translate, "binary_missing", binary))
-        BIN_DIR.mkdir(parents=True, exist_ok=True)
-        installed = BIN_DIR / package
-        temporary = BIN_DIR / f".{package}.new"
-        try:
-            shutil.copy2(binary, temporary)
-            temporary.chmod(temporary.stat().st_mode | 0o111)
-            _check_cancel(cancel_event)
-            os.replace(temporary, installed)
-        finally:
-            temporary.unlink(missing_ok=True)
-        # Replacing the binary is the commit point. Finish metadata and record
-        # the installed revision even if the user presses Cancel afterwards.
-        install_desktop_integration(repo, package, installed, log, translate)
-        BUILD_STATE_DIR.mkdir(parents=True, exist_ok=True)
-        (BUILD_STATE_DIR / f"{package}.commit").write_text(head + "\n")
-        _write_build_record(package, head, "success")
-        log(_message(translate, "install_path", installed))
-    except OperationCancelled:
-        if created_repo and repo.exists():
-            shutil.rmtree(repo, ignore_errors=True)
-        raise
+                parser.read(desktop, encoding="utf-8")
+                command = shlex.split(parser.get("Desktop Entry", "Exec", fallback=""))
+            except (OSError, configparser.Error, ValueError):
+                continue
+            if command and Path(command[0]).expanduser() == managed:
+                desktop.unlink(missing_ok=True)
+    shutil.rmtree(DATA_DIR / "icons" / "craft-updater" / package, ignore_errors=True)
 
 
 class CraftUpdater(tk.Tk):
@@ -584,6 +673,7 @@ class CraftUpdater(tk.Tk):
         self.cancel_event = None
         self.close_when_done = False
         self.latest_versions = {}
+        self.latest_releases = {}
         self.commit_deltas = {}
         self.app_version = _installed_deb_version() or APP_VERSION
         self.language = self._load_language()
@@ -930,15 +1020,17 @@ class CraftUpdater(tk.Tk):
                 tag = "missing"
             self.tree.set(item, "status", status)
             marker = BUILD_STATE_DIR / f"{package}.commit"
-            try:
-                installed_version = marker.read_text(encoding="utf-8").strip()[:8]
-            except OSError:
-                installed_version = self._t("unknown_version") if detected else self._t("no_version")
+            installed_version = _installed_app_version(package)
+            if not installed_version:
+                try:
+                    installed_version = marker.read_text(encoding="utf-8").strip()[:8]
+                except OSError:
+                    installed_version = self._t("unknown_version") if detected else self._t("no_version")
             latest = self.latest_versions.get(package)
             self.tree.set(item, "installed", installed_version)
-            self.tree.set(item, "available", latest[:8] if latest else self._t("no_version"))
+            self.tree.set(item, "available", latest if latest else self._t("no_version"))
             delta = self.commit_deltas.get(package)
-            self.tree.set(item, "commits", str(delta) if delta is not None else self._t("no_version"))
+            self.tree.set(item, "commits", "Ja" if delta else "Nein" if delta == 0 else self._t("no_version"))
             record = _read_build_record(package)
             finished = record.get("finished_at", "")
             try:
@@ -1031,7 +1123,7 @@ class CraftUpdater(tk.Tk):
         finished = record.get("finished_at", self._t("no_version"))
         result = record.get("result", self._t("unknown_version"))
         error = record.get("error", "")
-        details = f"{name}\n\nCommit: {commit}\nLetzter Lauf: {finished}\nErgebnis: {result}"
+        details = f"{name}\n\nVersion: {commit}\nLetztes Update: {finished}\nErgebnis: {result}"
         if error:
             details += f"\n\n{error}"
         messagebox.showinfo(name, details)
@@ -1088,27 +1180,24 @@ class CraftUpdater(tk.Tk):
         def operation():
             for item, (name, package) in self.items.items():
                 _check_cancel(self.cancel_event)
-                repo = REPOS / name
                 self.events.put(("log", self._t("checking_app").format(name)))
-                if repo.exists():
-                    run(["git", "fetch", "origin"], cwd=repo,
-                        on_line=lambda line: self.events.put(("log", line)), translate=translate, cancel_event=self.cancel_event)
-                    remote = run(["git", "rev-parse", "@{u}"], cwd=repo, translate=translate, cancel_event=self.cancel_event).strip()
-                    try:
-                        base = (BUILD_STATE_DIR / f"{package}.commit").read_text().strip()
-                    except OSError:
-                        base = run(["git", "rev-parse", "HEAD"], cwd=repo, translate=translate, cancel_event=self.cancel_event).strip()
-                    count = int(run(["git", "rev-list", f"{base}..{remote}", "--count"], cwd=repo, translate=translate, cancel_event=self.cancel_event).strip())
-                else:
-                    output = run(["git", "ls-remote", "https://github.com/storytold/" + name + ".git", "HEAD"], translate=translate, cancel_event=self.cancel_event).strip()
-                    remote = output.split()[0] if output else ""
-                    try:
-                        base = (BUILD_STATE_DIR / f"{package}.commit").read_text().strip()
-                    except OSError:
-                        base = ""
-                    count = 0 if base and base == remote else None
-                self.events.put(("version", (package, remote, count)))
-                status = self._t("commits_waiting").format(count) if count else self._t("up_to_date") if count == 0 else self._t("version_unknown")
+                try:
+                    release = _latest_app_release(name, package)
+                    installed = _installed_app_version(package)
+                    is_installed = installed_app(package) is not None
+                    count = int(bool(installed) and _app_version_key(release["version"]) > _app_version_key(installed))
+                    (BUILD_STATE_DIR / f"{package}.release.json").parent.mkdir(parents=True, exist_ok=True)
+                    (BUILD_STATE_DIR / f"{package}.release.json").write_text(
+                        json.dumps(release, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                    self.events.put(("version", (package, release["version"], count, release)))
+                    status = (self._t("commits_waiting").format(count) if count else
+                              self._t("up_to_date") if is_installed else self._t("not_installed"))
+                except OperationCancelled:
+                    raise
+                except Exception as exc:
+                    self.events.put(("version_error", (package, str(exc))))
+                    status = self._t("version_check_failed")
+                    self.events.put(("log", self._t("error_prefix") + " " + name + ": " + str(exc)))
                 self.events.put(("status", (item, "status", status)))
         self._start(self._t("check_run"), operation)
 
@@ -1126,7 +1215,9 @@ class CraftUpdater(tk.Tk):
                 self.events.put(("log", "\n" + self._t("already_starts").format(name)))
                 try:
                     _check_cancel(self.cancel_event)
-                    update_app(name, package, force, lambda line: self.events.put(("log", line)), translate, self.cancel_event)
+                    update_app(name, package, force, lambda line: self.events.put(("log", line)), translate, self.cancel_event,
+                               self.latest_releases.get(package),
+                               lambda active: self.events.put(("installing_system_package", active)))
                     results.append((name, True, ""))
                     self.events.put(("app_finished", index))
                     self.events.put(("log", self._t("app_completed").format(name)))
@@ -1239,12 +1330,24 @@ class CraftUpdater(tk.Tk):
                     self.status_var.set(self._t("progress_apps").format(index, total, name))
                 elif kind == "app_finished":
                     self.progress.configure(value=value)
+                elif kind == "installing_system_package":
+                    self.operation_cancellable = bool(value)
+                    self.cancel_btn.configure(state="disabled" if value else "normal")
+                    if value:
+                        self.status_var.set(self._t("installing_system_package"))
                 elif kind == "status": self.tree.set(*value)
                 elif kind == "refresh": self._refresh_status()
                 elif kind == "version":
-                    package, latest, count = value
+                    package, latest, count, release = value
                     self.latest_versions[package] = latest
+                    self.latest_releases[package] = release
                     self.commit_deltas[package] = count
+                    self._refresh_status()
+                elif kind == "version_error":
+                    package, _error = value
+                    self.latest_versions.pop(package, None)
+                    self.latest_releases.pop(package, None)
+                    self.commit_deltas[package] = None
                     self._refresh_status()
                 elif kind == "cancelled":
                     self._finish_operation(self._t("cancelled"))
