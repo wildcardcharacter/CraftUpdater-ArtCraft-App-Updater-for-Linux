@@ -1,3 +1,5 @@
+> **Project discontinued:** The ArtCraft applications now provide their own update functionality, so CraftUpdater is no longer actively developed.
+
 # CraftUpdater
 
 A lightweight Linux desktop app for checking and updating the open source ArtCraft applications from GitHub releases.
